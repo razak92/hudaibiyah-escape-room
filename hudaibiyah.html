@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>THE ARCHIVE — 3D Room Escape: Treaty of Hudaibiyah</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Three.js & OrbitControls CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <!-- Chosen Palette: Warm Antique Amber, Obsidian, Roasted Mahogany & Aged Brass -->
+  <!-- Application Structure Plan: Full 3D interior escape room chambers with procedural high-resolution dynamic canvas textures for authentic parchment, wax seals, brass sheath engravings, signet rings, and crisp padlock dial numbers. The 3D Inspector modal features enhanced 360° studio lighting, zoom controls, and a high-res inscription magnifier panel to guarantee complete visual clarity. Director Mode is restricted to authorized admin access via passcode verification. -->
+  <!-- Visualization & Content Choices: Procedural Three.js Dynamic Canvas Textures -> High-Res Lock Dial Markings, Parchment, Wax Seals & Gold Calligraphy -> 360° Interactive Studio Lighting Inspection + Magnified Inscription Panel -> Three.js WebGL & Web Audio API (NO SVG, NO MERMAID). -->
+  <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+  <style>
+    :root {
+      --amber: #e0a94f;
+      --amber-bright: #ffd275;
+      --bg-dark: #060712;
+      --card-bg: rgba(12, 14, 30, 0.94);
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: #f1f5f9;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    #webgl-container, #inspector-canvas-container {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      outline: none;
+    }
+    #webgl-container canvas, #inspector-canvas-container canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+    }
+    .dragging canvas {
+      cursor: grabbing !important;
+    }
+
+    .vignette {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      box-shadow: inset 0 0 180px 80px rgba(0, 0, 0, 0.88);
+    }
+
+    .glass-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(224, 169, 79, 0.35);
+      box-shadow: 0 25px 70px rgba(0,0,0,0.85);
+    }
+
+    .glass-pill {
+      background: rgba(8, 10, 22, 0.88);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .orbit-hint {
+      animation: floatHint 3s ease-in-out infinite;
+    }
+    @keyframes floatHint {
+      0%, 100% { transform: translate(-50%, 0); }
+      50% { transform: translate(-50%, -6px); }
+    }
+
+    @keyframes modalSlide {
+      from { opacity: 0; transform: scale(0.95) translateY(20px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .animate-modal {
+      animation: modalSlide 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+    }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(8, 10, 22, 0.8); }
+    ::-webkit-scrollbar-thumb { background: rgba(224,169,79,0.4); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(224,169,79,0.8); }
+  </style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden">
+
+  <!-- 3D WebGL Interior Room Container -->
+  <div id="webgl-container"></div>
+  <div class="vignette"></div>
+
+  <!-- Dynamic 3D Object Hover Tooltip -->
+  <div id="hoverTooltip" class="fixed z-20 pointer-events-none hidden bg-slate-950/95 border border-amber-400 text-amber-300 text-xs font-bold px-3 py-1.5 rounded-lg shadow-2xl transition-opacity duration-150 transform -translate-x-1/2 -translate-y-12 flex items-center gap-1.5">
+    <span id="tooltipIcon">🔍</span>
+    <span id="tooltipText">Inspect Room Prop</span>
+  </div>
+
+  <!-- MAIN HUD OVERLAY -->
+  <div class="relative z-10 w-full h-full flex flex-col justify-between p-4 md:p-6 pointer-events-none">
+    
+    <!-- Top Bar Navigation HUD -->
+    <header class="w-full max-w-6xl mx-auto flex items-center justify-between gap-4 pointer-events-auto">
+      <!-- Title & Chamber Badge (Clicking 3x triggers Admin PIN modal) -->
+      <div class="flex items-center gap-3 cursor-pointer group" title="Click to inspect case info" onclick="handleBadgeClick()">
+        <div class="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold text-2xl shadow-lg group-hover:scale-105 transition-transform">
+          🏰
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="text-[10px] font-extrabold uppercase tracking-widest text-amber-400">3D Escape Room Architecture</span>
+            <span class="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">HISTORICAL EXPERIENCE</span>
+          </div>
+          <h1 id="hudCaseTitle" class="text-sm md:text-base font-black text-slate-100 drop-shadow">Treaty of Hudaibiyah (628 CE)</h1>
+        </div>
+      </div>
+
+      <!-- Header Action Controls -->
+      <div class="flex items-center gap-2">
+        <button id="soundToggleBtn" onclick="toggleAudio()" class="glass-pill px-3.5 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-amber-300 border border-slate-700 hover:border-amber-500/50 transition flex items-center gap-1.5">
+          <span id="soundIcon">🔊</span>
+          <span id="soundStatusText">Sound ON</span>
+        </button>
+        <button onclick="restartCase()" class="glass-pill px-3 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 transition">
+          🔄 Reset Room
+        </button>
+      </div>
+    </header>
+
+    <!-- Navigation Camera Control Hint -->
+    <div id="orbitHint" class="orbit-hint fixed bottom-28 left-1/2 -translate-x-1/2 glass-pill px-5 py-2 rounded-full text-xs text-amber-300 font-semibold border border-amber-500/30 shadow-2xl pointer-events-none flex items-center gap-2">
+      <span>🚪</span> Look Around Room (Drag 360°) &bull; Scroll to Zoom &bull; Click 3D Props inside the Room
+    </div>
+
+    <!-- Bottom HUD Bar: Chamber Status & Room Inventory -->
+    <footer class="w-full max-w-5xl mx-auto flex flex-col items-center gap-3 pointer-events-auto">
+      
+      <!-- Chamber Progress Card -->
+      <div class="w-full glass-card p-4 rounded-2xl flex flex-col lg:flex-row items-center justify-between gap-4 border border-amber-500/30">
+        
+        <!-- Active Room Info -->
+        <div class="flex items-center gap-3">
+          <div id="missionBadge" class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 font-black flex items-center justify-center text-base shadow-md">
+            1
+          </div>
+          <div>
+            <div class="text-[10px] uppercase font-black text-amber-400 tracking-wider">Active 3D Chamber Room</div>
+            <div id="missionTitleText" class="text-sm md:text-base font-bold text-white">Room 1: Bedouin Encampment Tent Enclosure</div>
+          </div>
+        </div>
+
+        <!-- Inventory Item Slots -->
+        <div class="flex items-center gap-2 overflow-x-auto max-w-full py-1" id="inventoryContainer">
+          <!-- Dynamic inventory buttons populated by JS -->
+        </div>
+
+        <!-- Room Chamber Door Button -->
+        <div class="flex items-center gap-2 w-full lg:w-auto">
+          <button id="inspectRoomBtn" onclick="openChamberLockModal()" class="w-full lg:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider transition shadow-lg hover:shadow-amber-500/20 active:scale-95 whitespace-nowrap flex items-center justify-center gap-1.5">
+            🔓 Chamber Door Lock
+          </button>
+        </div>
+      </div>
+
+      <!-- Subtle Footer Bar with Hidden Admin Lock Trigger -->
+      <div class="flex items-center justify-between w-full px-2 text-[10px] text-slate-500">
+        <span>Treaty of Hudaibiyah Historical Archive</span>
+        <button onclick="promptAdminLogin()" class="hover:text-amber-400/80 transition flex items-center gap-1 focus:outline-none">
+          <span>🔒</span> Admin Access
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <!-- MODAL CONTAINER (Inspectors, Door Padlock, Quizzes, Certificates, Admin) -->
+  <div id="modalBackdrop" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+    <div id="modalContent" class="glass-card w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl p-6 relative border border-amber-500/40 animate-modal text-slate-100">
+      <!-- Dynamic Content Injected Here -->
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    /* =========================================================================
+       1. GLOBAL HISTORICAL REPORT DATA
+       ========================================================================= */
+    const DEFAULT_CASE = {
+      id: "hudaibiyah_628",
+      title: "Treaty of Hudaibiyah (628 CE) — Room Escape Case",
+      missions: [
+        {
+          id: "m1",
+          title: "Bedouin Tent Enclosure",
+          theme: "desert_room",
+          clueItemName: "Sheathed Pilgrim Dagger",
+          clueIcon: "🗡️",
+          unlockWord: "1400",
+          story: "Inside this Bedouin tent enclosure, 1,400 Muslims encamped at Hudaibiyah in March 628 CE. Clad only in white pilgrim garments (Ihram), they carried no weapons of war—only sheathed travel daggers.",
+          question: "Examine the sheath engraving on the Pilgrim Dagger sitting on the wooden low table inside the room. How many unarmed pilgrims marched to Hudaibiyah?",
+          options: ["500 Pilgrims", "1,400 Pilgrims", "3,000 Pilgrims", "10,000 Pilgrims"],
+          correctOpt: 1
+        },
+        {
+          id: "m2",
+          title: "Diplomatic Negotiating Room",
+          theme: "pavilion_room",
+          clueItemName: "Diplomatic Treaty Scroll",
+          clueIcon: "📜",
+          unlockWord: "SUHAIL",
+          story: "This carpeted diplomatic chamber hosted delicate negotiations between Muslim emissaries and Qurayshi envoy Suhail ibn Amr. Strategic compromises ensured a historic non-aggression truce.",
+          question: "Inspect the Parchment Scroll lying on the mahogany writing desk. Who was the chief Qurayshi envoy whose signature and red wax seal bind this pact?",
+          options: ["Abu Sufyan", "Suhail ibn Amr", "Ikrimah ibn Abi Jahl", "Khalid ibn al-Walid"],
+          correctOpt: 1
+        },
+        {
+          id: "m3",
+          title: "Courtyard of Bay'at al-Ridwan",
+          theme: "courtyard_room",
+          clueItemName: "Silver Signet Seal Ring",
+          clueIcon: "💍",
+          unlockWord: "RIDWAN",
+          story: "Inside this stone courtyard with an ancient acacia planter, companions swore a sacred oath of unity and allegiance under the tree ('Bay'at al-Ridwan') when diplomatic rumors spread.",
+          question: "Inspect the Silver Signet Ring resting on the stone table cushion. What was this historic pledge of divine satisfaction called?",
+          options: ["Bay'at al-Aqabah", "Bay'at al-Ridwan", "Pact of Madinah", "Pledge of Ta'if"],
+          correctOpt: 1
+        },
+        {
+          id: "m4",
+          title: "Fortress Truce Gate Room",
+          theme: "gate_room",
+          clueItemName: "Heavy Iron Door Lock",
+          clueIcon: "🔒",
+          unlockWord: "10",
+          story: "This stone fortress room controls access to Makkah. The Treaty of Hudaibiyah guaranteed a 10-year armistice, ending hostilies and allowing peaceful trade across Arabia.",
+          question: "Examine the engraved combination dial on the Heavy Iron Door Lock. Select the door lock code matching the exact number of years of armistice guaranteed by the treaty.",
+          options: ["3 Years", "5 Years", "10 Years", "20 Years"],
+          correctOpt: 2
+        },
+        {
+          id: "m5",
+          title: "Sanctuary of Clear Victory Hall",
+          theme: "sanctuary_room",
+          clueItemName: "Manifest Victory Plaque",
+          clueIcon: "🏺",
+          unlockWord: "VICTORY",
+          story: "This high-arched marble sanctuary honors the revelation of Surah Al-Fath: 'Verily, We have granted you a Clear Victory.' Peace enabled more people to enter Islam in 2 years than in 19 previous years.",
+          question: "Inspect the golden calligraphy plaque on the marble pedestal. Which Surah proclaimed the Treaty a 'Manifest Victory'?",
+          options: ["Surah Al-Baqarah", "Surah Al-Fath", "Surah Al-Anfal", "Surah Al-Tawbah"],
+          correctOpt: 1
+        }
+      ]
+    };
+
+    let activeCase = JSON.parse(localStorage.getItem('archive_room_case_v1')) || DEFAULT_CASE;
+    let currentState = {
+      currentMissionIdx: 0,
+      collectedItems: [],
+      audioEnabled: true
+    };
+
+    let badgeClickCount = 0;
+    let badgeClickTimer = null;
+
+    /* =========================================================================
+       2. SYNTHESIZED WEB AUDIO FX
+       ========================================================================= */
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    function toggleAudio() {
+      currentState.audioEnabled = !currentState.audioEnabled;
+      document.getElementById('soundStatusText').innerText = currentState.audioEnabled ? "Sound ON" : "Sound OFF";
+      document.getElementById('soundIcon').innerText = currentState.audioEnabled ? "🔊" : "🔇";
+      if (currentState.audioEnabled) playSynthSound(523.25, 'sine', 0.1);
+    }
+
+    function playSynthSound(freq, type = 'sine', duration = 0.15, gainVal = 0.1) {
+      if (!currentState.audioEnabled) return;
+      initAudio();
+      try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(gainVal, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch (e) { console.error(e); }
+    }
+
+    function playSuccessChime() {
+      if (!currentState.audioEnabled) return;
+      [523.25, 659.25, 783.99, 1046.50].forEach((f, i) => {
+        setTimeout(() => playSynthSound(f, 'triangle', 0.25, 0.15), i * 90);
+      });
+    }
+
+    function playErrorBuzz() {
+      if (!currentState.audioEnabled) return;
+      playSynthSound(140, 'sawtooth', 0.28, 0.2);
+    }
+
+    /* =========================================================================
+       3. CANVAS 2D PROCEDURAL TEXTURE GENERATORS (HIGH-RES HD)
+       ========================================================================= */
+
+    // 1. Treaty Scroll Parchment with Legible Ink & Wax Seal Signature "SUHAIL"
+    function createScrollTextureCanvas() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+
+      // Aged Parchment Background
+      const grad = ctx.createRadialGradient(512, 512, 50, 512, 512, 600);
+      grad.addColorStop(0, '#fbf3db');
+      grad.addColorStop(0.7, '#e8d5a7');
+      grad.addColorStop(1, '#c2a160');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      // Paper Grain & Stains
+      ctx.fillStyle = 'rgba(90, 60, 20, 0.05)';
+      for (let i = 0; i < 5000; i++) {
+        ctx.fillRect(Math.random() * 1024, Math.random() * 1024, Math.random() * 3 + 1, Math.random() * 3 + 1);
+      }
+
+      // Border Trim
+      ctx.strokeStyle = '#8a5e2a';
+      ctx.lineWidth = 14;
+      ctx.strokeRect(30, 30, 964, 964);
+      ctx.lineWidth = 4;
+      ctx.strokeRect(48, 48, 928, 928);
+
+      // Calligraphy Header Text
+      ctx.fillStyle = '#1c1007';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 38px Georgia, serif';
+      ctx.fillText("TREATY OF HUDAIBIYAH (628 CE)", 512, 115);
+
+      ctx.font = 'italic 22px serif';
+      ctx.fillStyle = '#4a3219';
+      ctx.fillText("Official Peace Pact & 10-Year Armistice Agreement", 512, 150);
+
+      // Body Calligraphy Lines
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#26160a';
+      ctx.font = '500 21px Georgia, serif';
+      const lines = [
+        "In the Name of Allah. Peaceful pact between Muslims & Quraysh.",
+        "1. Hostilities between both parties shall cease for ten years.",
+        "2. Anyone wishing to enter an alliance with either side may do so.",
+        "3. Absolute safety of trade routes, pilgrims, and envoys guaranteed.",
+        "4. Sealed and witnessed by delegates at Al-Hudaibiyah."
+      ];
+      lines.forEach((line, idx) => {
+        ctx.fillText(line, 80, 225 + idx * 45);
+      });
+
+      // Red Wax Seal Stamp with Inscribed Signature "SUHAIL"
+      ctx.save();
+      ctx.translate(512, 650);
+
+      // Outer Red Wax Circle
+      const waxGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, 180);
+      waxGrad.addColorStop(0, '#e03131');
+      waxGrad.addColorStop(0.7, '#9e1818');
+      waxGrad.addColorStop(1, '#520d0d');
+      ctx.fillStyle = waxGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, 175, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Wax Ridge
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.arc(0, 0, 152, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Inner Seal Stamp Inscription
+      ctx.fillStyle = '#ffe066';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 30px Georgia, serif';
+      ctx.fillText("OFFICIAL QURAYSHI SEAL", 0, -60);
+
+      // High Visibility Signature Text "SUHAIL"
+      ctx.font = '900 68px Georgia, serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 12;
+      ctx.fillText("SUHAIL", 0, 20);
+
+      ctx.font = 'bold 24px serif';
+      ctx.fillStyle = '#fff3bf';
+      ctx.shadowBlur = 0;
+      ctx.fillText("Chief Envoy • Suhail ibn Amr", 0, 78);
+
+      ctx.restore();
+
+      return canvas;
+    }
+
+    // 2. Brass Dagger Sheath Texture with "1400" Engraving
+    function createDaggerTextureCanvas() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+
+      const grad = ctx.createLinearGradient(0, 0, 1024, 0);
+      grad.addColorStop(0, '#9e732b');
+      grad.addColorStop(0.5, '#ffd275');
+      grad.addColorStop(1, '#735017');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      ctx.strokeStyle = '#2e1c03';
+      ctx.lineWidth = 20;
+      ctx.strokeRect(30, 30, 964, 964);
+
+      ctx.fillStyle = '#1a1002';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 64px Georgia, serif';
+      ctx.fillText("PILGRIM DAGGER", 512, 240);
+
+      ctx.font = 'black 180px Impact, sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 25;
+      ctx.fillText("1400", 512, 540);
+
+      ctx.font = 'bold 46px Georgia, serif';
+      ctx.fillStyle = '#2b1a03';
+      ctx.shadowBlur = 0;
+      ctx.fillText("UNARMED PILGRIMS MARCH", 512, 720);
+
+      return canvas;
+    }
+
+    // 3. Silver Signet Ring Texture with "RIDWAN" Engraving
+    function createRingTextureCanvas() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+
+      const grad = ctx.createRadialGradient(512, 512, 40, 512, 512, 480);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.6, '#cbd5e1');
+      grad.addColorStop(1, '#475569');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.ellipse(512, 512, 420, 280, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#f1f5f9';
+      ctx.lineWidth = 14;
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.font = '900 130px Georgia, serif';
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 20;
+      ctx.fillText("RIDWAN", 512, 540);
+
+      ctx.font = 'bold 44px sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.shadowBlur = 0;
+      ctx.fillText("BAY'AT AL-RIDWAN PLEDGE", 512, 670);
+
+      return canvas;
+    }
+
+    // 4. Gold Calligraphy Plaque Texture (Surah Al-Fath)
+    function createPlaqueTextureCanvas() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+
+      const grad = ctx.createLinearGradient(0, 0, 1024, 1024);
+      grad.addColorStop(0, '#ffe066');
+      grad.addColorStop(0.5, '#d9a000');
+      grad.addColorStop(1, '#805e00');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      ctx.strokeStyle = '#3d2d00';
+      ctx.lineWidth = 28;
+      ctx.strokeRect(40, 40, 944, 944);
+
+      ctx.fillStyle = '#1c1700';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 68px Georgia, serif';
+      ctx.fillText("SURAH AL-FATH (48:1)", 512, 220);
+
+      ctx.font = 'black 100px Georgia, serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 25;
+      ctx.fillText("CLEAR VICTORY", 512, 480);
+
+      ctx.font = 'italic 46px Georgia, serif';
+      ctx.fillStyle = '#211c00';
+      ctx.shadowBlur = 0;
+      ctx.fillText('"Verily, We have granted you', 512, 650);
+      ctx.fillText('a Manifest Victory."', 512, 730);
+
+      return canvas;
+    }
+
+    // 5. Heavy Iron Combination Padlock Texture (HIGH RESOLUTION & EXTREMELY CLEAR NUMBERS)
+    function createPadlockTextureCanvas() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 1024;
+      const ctx = canvas.getContext('2d');
+
+      // Metallic Cast Iron Background
+      const bgGrad = ctx.createLinearGradient(0, 0, 1024, 1024);
+      bgGrad.addColorStop(0, '#334155');
+      bgGrad.addColorStop(0.5, '#1e293b');
+      bgGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, 1024, 1024);
+
+      // Gold Brass Frame Border
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 24;
+      ctx.strokeRect(30, 30, 964, 964);
+
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 8;
+      ctx.strokeRect(50, 50, 924, 924);
+
+      // Title Inscription
+      ctx.fillStyle = '#fbbf24';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 58px Georgia, serif';
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 10;
+      ctx.fillText("FORTRESS TRUCE GATE LOCK", 512, 150);
+
+      ctx.font = '600 32px sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.shadowBlur = 0;
+      ctx.fillText("ARMISTICE DURATION CODE", 512, 210);
+
+      // Combination Dial Wheels Plate
+      ctx.fillStyle = '#020617';
+      ctx.fillRect(120, 280, 784, 480);
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(120, 280, 784, 480);
+
+      // Render 3 Distinct Dial Wheels: [ 1 ] [ 0 ] [ YEARS ]
+      const wheelX = [250, 512, 770];
+      const numbers = ["1", "0", "YRS"];
+
+      wheelX.forEach((x, idx) => {
+        // Wheel Box
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(x - 100, 320, 200, 400);
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(x - 100, 320, 200, 400);
+
+        // Dial Numbers - Bold White Glowing
+        ctx.fillStyle = '#ffffff';
+        ctx.font = idx === 2 ? '900 80px Impact, sans-serif' : '900 180px Impact, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#fbbf24';
+        ctx.shadowBlur = 30;
+        ctx.fillText(numbers[idx], x, idx === 2 ? 550 : 580);
+        ctx.shadowBlur = 0;
+
+        // Dial Wheel Notches
+        ctx.fillStyle = '#64748b';
+        ctx.fillRect(x - 80, 340, 160, 12);
+        ctx.fillRect(x - 80, 680, 160, 12);
+      });
+
+      // Bottom Explanatory Inscription
+      ctx.fillStyle = '#fef08a';
+      ctx.font = '900 64px Georgia, serif';
+      ctx.shadowColor = '#000000';
+      ctx.shadowBlur = 15;
+      ctx.fillText("COMBINATION CODE: 10 YEARS", 512, 870);
+
+      ctx.font = 'italic 34px Georgia, serif';
+      ctx.fillStyle = '#cbd5e1';
+      ctx.shadowBlur = 0;
+      ctx.fillText("10-Year Non-Aggression Truce Pact (628 CE)", 512, 940);
+
+      return canvas;
+    }
+
+
+    /* =========================================================================
+       4. THREE.JS 3D ROOM ARCHITECTURE ENGINE & OBJECT GENERATORS
+       ========================================================================= */
+    let scene, camera, renderer, controls;
+    let roomGroup = null;
+    let interactiveObjects = [];
+    let raycaster = new THREE.Raycaster();
+    let mouse = new THREE.Vector2();
+    let hoveredObject = null;
+    let roomLights = [];
+
+    // Separate Inspector Three.js instance
+    let inspectorScene, inspectorCamera, inspectorRenderer, inspectorControls;
+
+    function init3D() {
+      const container = document.getElementById('webgl-container');
+      
+      // Scene
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x060712);
+      scene.fog = new THREE.FogExp2(0x060712, 0.035);
+
+      // Camera inside the room space
+      camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+      camera.position.set(0, 1.8, 5.2);
+
+      // WebGL Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.15;
+      container.appendChild(renderer.domElement);
+
+      // Orbit Controls
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.maxPolarAngle = Math.PI / 2 + 0.1; 
+      controls.minPolarAngle = Math.PI / 6;
+      controls.minDistance = 1.2;
+      controls.maxDistance = 6.8;
+      controls.target.set(0, 1.2, 0);
+
+      // Event Listeners
+      window.addEventListener('resize', onWindowResize);
+      renderer.domElement.addEventListener('mousemove', onMouseMove);
+      renderer.domElement.addEventListener('click', onCanvasClick);
+
+      renderer.domElement.addEventListener('mousedown', () => {
+        container.classList.add('dragging');
+        document.getElementById('orbitHint')?.classList.add('opacity-0');
+      });
+      renderer.domElement.addEventListener('mouseup', () => {
+        container.classList.remove('dragging');
+      });
+
+      // Load Room 1 Architecture
+      loadRoomArchitecture(currentState.currentMissionIdx);
+
+      // Animation Loop
+      animate();
+    }
+
+    /* Clear and build 3D Room Shell (Walls, Floor, Ceiling, Furniture, Artifacts) */
+    function loadRoomArchitecture(missionIdx) {
+      if (roomGroup) scene.remove(roomGroup);
+      interactiveObjects = [];
+      roomLights = [];
+
+      roomGroup = new THREE.Group();
+      const mission = activeCase.missions[missionIdx];
+      const theme = mission ? mission.theme : 'desert_room';
+
+      // --- COMMON ROOM ENCLOSURE SHELL ---
+      const roomWidth = 9.0, roomHeight = 5.2, roomDepth = 9.0;
+
+      // Materials based on room theme
+      let wallColor = 0x241d18, floorColor = 0x3d2719, ceilingColor = 0x1a1512;
+      if (theme === 'pavilion_room') { wallColor = 0x3d1c1d; floorColor = 0x541720; ceilingColor = 0x211012; }
+      else if (theme === 'courtyard_room') { wallColor = 0x222633; floorColor = 0x171924; ceilingColor = 0x0f111a; }
+      else if (theme === 'gate_room') { wallColor = 0x1c202e; floorColor = 0x12141f; ceilingColor = 0x0c0d14; }
+      else if (theme === 'sanctuary_room') { wallColor = 0x12182b; floorColor = 0x0a0f1e; ceilingColor = 0x080b14; }
+
+      const wallMat = new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.85 });
+      const floorMat = new THREE.MeshStandardMaterial({ color: floorColor, roughness: 0.6 });
+      const ceilingMat = new THREE.MeshStandardMaterial({ color: ceilingColor, roughness: 0.9 });
+
+      // Floor
+      const floorGeo = new THREE.PlaneGeometry(roomWidth, roomDepth);
+      const floor = new THREE.Mesh(floorGeo, floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      roomGroup.add(floor);
+
+      // Ceiling
+      const ceiling = new THREE.Mesh(floorGeo, ceilingMat);
+      ceiling.position.y = roomHeight;
+      ceiling.rotation.x = Math.PI / 2;
+      roomGroup.add(ceiling);
+
+      // Back Wall
+      const backWallGeo = new THREE.PlaneGeometry(roomWidth, roomHeight);
+      const backWall = new THREE.Mesh(backWallGeo, wallMat);
+      backWall.position.set(0, roomHeight / 2, -roomDepth / 2);
+      backWall.receiveShadow = true;
+      roomGroup.add(backWall);
+
+      // Left Wall
+      const sideWallGeo = new THREE.PlaneGeometry(roomDepth, roomHeight);
+      const leftWall = new THREE.Mesh(sideWallGeo, wallMat);
+      leftWall.position.set(-roomWidth / 2, roomHeight / 2, 0);
+      leftWall.rotation.y = Math.PI / 2;
+      leftWall.receiveShadow = true;
+      roomGroup.add(leftWall);
+
+      // Right Wall
+      const rightWall = new THREE.Mesh(sideWallGeo, wallMat);
+      rightWall.position.set(roomWidth / 2, roomHeight / 2, 0);
+      rightWall.rotation.y = -Math.PI / 2;
+      rightWall.receiveShadow = true;
+      roomGroup.add(rightWall);
+
+      // Wooden Support Beams
+      for (let b = -3.5; b <= 3.5; b += 2.3) {
+        const beamGeo = new THREE.BoxGeometry(0.35, 0.35, roomWidth);
+        const beamMat = new THREE.MeshStandardMaterial({ color: 0x1f140e, roughness: 0.8 });
+        const beam = new THREE.Mesh(beamGeo, beamMat);
+        beam.position.set(b, roomHeight - 0.2, 0);
+        beam.castShadow = true;
+        roomGroup.add(beam);
+      }
+
+      // Central Lantern
+      const lanternGeo = new THREE.CylinderGeometry(0.25, 0.35, 0.7, 12);
+      const lanternMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.85, roughness: 0.2 });
+      const lantern = new THREE.Mesh(lanternGeo, lanternMat);
+      lantern.position.set(0, roomHeight - 1.2, 0);
+      roomGroup.add(lantern);
+
+      const chainGeo = new THREE.CylinderGeometry(0.02, 0.02, 1.0, 8);
+      const chain = new THREE.Mesh(chainGeo, lanternMat);
+      chain.position.set(0, roomHeight - 0.5, 0);
+      roomGroup.add(chain);
+
+      // Flame Light
+      const roomLight = new THREE.PointLight(0xffa844, 2.8, 12);
+      roomLight.position.set(0, roomHeight - 1.5, 0);
+      roomLight.castShadow = true;
+      roomGroup.add(roomLight);
+      roomLights.push(roomLight);
+
+      const ambLight = new THREE.AmbientLight(0xdbe4ff, 0.45);
+      roomGroup.add(ambLight);
+
+      // --- BUILD ROOM SPECIFIC INTERIOR FURNITURE & PROPS ---
+      if (theme === 'desert_room') buildDesertRoomInterior(roomGroup);
+      else if (theme === 'pavilion_room') buildPavilionRoomInterior(roomGroup);
+      else if (theme === 'courtyard_room') buildCourtyardRoomInterior(roomGroup);
+      else if (theme === 'gate_room') buildGateRoomInterior(roomGroup);
+      else buildSanctuaryRoomInterior(roomGroup);
+
+      scene.add(roomGroup);
+
+      camera.position.set(0, 1.8, 4.2);
+      controls.target.set(0, 1.1, 0);
+      controls.update();
+    }
+
+    /* ---------------- INDIVIDUAL 3D ROOM INTERIORS ---------------- */
+
+    function buildDesertRoomInterior(group) {
+      const rugGeo = new THREE.PlaneGeometry(5.2, 4.2);
+      const rugMat = new THREE.MeshStandardMaterial({ color: 0x8a2323, roughness: 0.7 });
+      const rug = new THREE.Mesh(rugGeo, rugMat);
+      rug.rotation.x = -Math.PI / 2;
+      rug.position.set(0, 0.02, 0.2);
+      rug.receiveShadow = true;
+      group.add(rug);
+
+      const tableGeo = new THREE.BoxGeometry(2.4, 0.5, 1.4);
+      const tableMat = new THREE.MeshStandardMaterial({ color: 0x2e180c, roughness: 0.6 });
+      const table = new THREE.Mesh(tableGeo, tableMat);
+      table.position.set(0, 0.25, 0);
+      table.castShadow = true;
+      table.receiveShadow = true;
+      group.add(table);
+
+      const dagger = create3DPilgrimDagger();
+      dagger.position.set(-0.2, 0.55, 0.1);
+      group.add(dagger);
+    }
+
+    function buildPavilionRoomInterior(group) {
+      const rugGeo = new THREE.PlaneGeometry(6.0, 5.0);
+      const rugMat = new THREE.MeshStandardMaterial({ color: 0x541720, roughness: 0.5 });
+      const rug = new THREE.Mesh(rugGeo, rugMat);
+      rug.rotation.x = -Math.PI / 2;
+      rug.position.set(0, 0.02, 0);
+      rug.receiveShadow = true;
+      group.add(rug);
+
+      const deskGeo = new THREE.BoxGeometry(3.0, 0.9, 1.6);
+      const deskMat = new THREE.MeshStandardMaterial({ color: 0x2b1509, roughness: 0.4 });
+      const desk = new THREE.Mesh(deskGeo, deskMat);
+      desk.position.set(0, 0.45, -0.5);
+      desk.castShadow = true;
+      desk.receiveShadow = true;
+      group.add(desk);
+
+      // REAL ITEM: Parchment Treaty Scroll with Wax Seal & Signature on Desk
+      const scroll = create3DParchmentScroll();
+      scroll.position.set(0, 0.95, -0.3);
+      group.add(scroll);
+    }
+
+    function buildCourtyardRoomInterior(group) {
+      const tileGeo = new THREE.PlaneGeometry(6.5, 5.5);
+      const tileMat = new THREE.MeshStandardMaterial({ color: 0x222633, roughness: 0.8 });
+      const tile = new THREE.Mesh(tileGeo, tileMat);
+      tile.rotation.x = -Math.PI / 2;
+      tile.position.set(0, 0.02, 0);
+      tile.receiveShadow = true;
+      group.add(tile);
+
+      const benchGeo = new THREE.BoxGeometry(2.6, 0.6, 1.2);
+      const benchMat = new THREE.MeshStandardMaterial({ color: 0x34394a, roughness: 0.7 });
+      const bench = new THREE.Mesh(benchGeo, benchMat);
+      bench.position.set(0, 0.3, -0.8);
+      bench.castShadow = true;
+      group.add(bench);
+
+      const sealRing = create3DSilverSignetRing();
+      sealRing.position.set(0, 0.65, -0.8);
+      group.add(sealRing);
+    }
+
+    function buildGateRoomInterior(group) {
+      const gateGeo = new THREE.BoxGeometry(3.2, 3.8, 0.3);
+      const gateMat = new THREE.MeshStandardMaterial({ color: 0x361f12, roughness: 0.6 });
+      const gate = new THREE.Mesh(gateGeo, gateMat);
+      gate.position.set(0, 1.9, -4.3);
+      group.add(gate);
+
+      const padlock = create3DCombinationPadlock();
+      padlock.position.set(0, 1.8, -4.0);
+      group.add(padlock);
+    }
+
+    function buildSanctuaryRoomInterior(group) {
+      const marbleGeo = new THREE.PlaneGeometry(6.8, 6.0);
+      const marbleMat = new THREE.MeshStandardMaterial({ color: 0x0c1221, roughness: 0.15, metalness: 0.5 });
+      const marble = new THREE.Mesh(marbleGeo, marbleMat);
+      marble.rotation.x = -Math.PI / 2;
+      marble.position.set(0, 0.02, 0);
+      marble.receiveShadow = true;
+      group.add(marble);
+
+      const pedGeo = new THREE.CylinderGeometry(1.0, 1.2, 1.4, 16);
+      const pedMat = new THREE.MeshStandardMaterial({ color: 0x1e273d, roughness: 0.3, metalness: 0.4 });
+      const pedestal = new THREE.Mesh(pedGeo, pedMat);
+      pedestal.position.set(0, 0.7, -0.5);
+      pedestal.castShadow = true;
+      group.add(pedestal);
+
+      const plaque = create3DCalligraphyPlaque();
+      plaque.position.set(0, 1.6, -0.5);
+      group.add(plaque);
+    }
+
+
+    /* ---------------- 3D PROPS WITH HIGH-RES CANVAS TEXTURES ---------------- */
+
+    // Helper to configure HD sharp canvas texture
+    function createHDTexture(canvas) {
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.anisotropy = renderer ? renderer.capabilities.getMaxAnisotropy() : 16;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = true;
+      texture.needsUpdate = true;
+      return texture;
+    }
+
+    // 1. Diplomatic Parchment Treaty Scroll
+    function create3DParchmentScroll() {
+      const scrollGroup = new THREE.Group();
+      scrollGroup.userData = {
+        name: "Diplomatic Treaty Scroll",
+        icon: "📜",
+        inspectText: "Parchment Scroll bearing the official Red Wax Seal and Signature of 'SUHAIL'.",
+        inspectDetails: "Suhail ibn Amr signed on behalf of the Quraysh, establishing a historic 10-year peace pact.",
+        signatureType: "scroll"
+      };
+
+      const canvasTex = createHDTexture(createScrollTextureCanvas());
+
+      const sheetGeo = new THREE.PlaneGeometry(1.4, 1.1);
+      const sheetMat = new THREE.MeshStandardMaterial({
+        map: canvasTex,
+        roughness: 0.6,
+        metalness: 0.05,
+        side: THREE.DoubleSide
+      });
+      const sheet = new THREE.Mesh(sheetGeo, sheetMat);
+      sheet.rotation.x = -Math.PI / 2 + 0.15;
+      scrollGroup.add(sheet);
+
+      const rollGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.4, 24);
+      const rollMat = new THREE.MeshStandardMaterial({ color: 0xd6c08d, roughness: 0.6 });
+
+      const topRoll = new THREE.Mesh(rollGeo, rollMat);
+      topRoll.rotation.z = Math.PI / 2;
+      topRoll.position.set(0, 0.04, -0.55);
+      scrollGroup.add(topRoll);
+
+      const btmRoll = new THREE.Mesh(rollGeo, rollMat);
+      btmRoll.rotation.z = Math.PI / 2;
+      btmRoll.position.set(0, 0.04, 0.55);
+      scrollGroup.add(btmRoll);
+
+      interactiveObjects.push(scrollGroup);
+      return scrollGroup;
+    }
+
+    // 2. Sheathed Pilgrim Dagger
+    function create3DPilgrimDagger() {
+      const daggerGroup = new THREE.Group();
+      daggerGroup.userData = {
+        name: "Sheathed Pilgrim Dagger",
+        icon: "🗡️",
+        inspectText: "Brass Sheath Inscription: '1400 Unarmed Pilgrims March for Umrah (628 CE)'",
+        inspectDetails: "Muslims brought only single travel daggers sheathed in leather to demonstrate their peaceful intent.",
+        signatureType: "dagger"
+      };
+
+      const canvasTex = createHDTexture(createDaggerTextureCanvas());
+      const scabbardGeo = new THREE.CylinderGeometry(0.12, 0.06, 1.4, 24);
+      const scabbardMat = new THREE.MeshStandardMaterial({ map: canvasTex, roughness: 0.3, metalness: 0.6 });
+      const scabbard = new THREE.Mesh(scabbardGeo, scabbardMat);
+      scabbard.rotation.z = Math.PI / 2;
+      daggerGroup.add(scabbard);
+
+      interactiveObjects.push(daggerGroup);
+      return daggerGroup;
+    }
+
+    // 3. Silver Signet Ring
+    function create3DSilverSignetRing() {
+      const ringGroup = new THREE.Group();
+      ringGroup.userData = {
+        name: "Silver Signet Seal Ring",
+        icon: "💍",
+        inspectText: "Silver Ring inscribed with 'RIDWAN' and official seal.",
+        inspectDetails: "Commemorates the pledge under the acacia tree.",
+        signatureType: "ring"
+      };
+
+      const canvasTex = createHDTexture(createRingTextureCanvas());
+      const sealGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.1, 32);
+      const sealMat = new THREE.MeshStandardMaterial({ map: canvasTex, metalness: 0.9, roughness: 0.15 });
+      const seal = new THREE.Mesh(sealGeo, sealMat);
+      seal.position.y = 0.2;
+      ringGroup.add(seal);
+
+      const cushionGeo = new THREE.BoxGeometry(0.9, 0.2, 0.9);
+      const cushionMat = new THREE.MeshStandardMaterial({ color: 0x4a101b, roughness: 0.8 });
+      const cushion = new THREE.Mesh(cushionGeo, cushionMat);
+      ringGroup.add(cushion);
+
+      interactiveObjects.push(ringGroup);
+      return ringGroup;
+    }
+
+    // 4. Combination Padlock with ULTRA CLEAR Dynamic Canvas Texture
+    function create3DCombinationPadlock() {
+      const lockGroup = new THREE.Group();
+      lockGroup.userData = {
+        name: "Heavy Iron Door Lock",
+        icon: "🔒",
+        inspectText: "Iron Padlock with clear combination dial displaying '10' Years Armistice Code.",
+        inspectDetails: "Inspect the high-resolution dial face to confirm the 10-year truce duration code.",
+        signatureType: "lock"
+      };
+
+      const canvasTex = createHDTexture(createPadlockTextureCanvas());
+
+      // Lock Main Plate with Front Texture Face
+      const bodyGeo = new THREE.BoxGeometry(1.2, 1.0, 0.3);
+      const bodyMat = new THREE.MeshStandardMaterial({
+        map: canvasTex,
+        metalness: 0.75,
+        roughness: 0.25
+      });
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      lockGroup.add(body);
+
+      // Metallic Steel Shackle Ring
+      const shackleGeo = new THREE.TorusGeometry(0.35, 0.08, 16, 32, Math.PI);
+      const shackleMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.95, roughness: 0.1 });
+      const shackle = new THREE.Mesh(shackleGeo, shackleMat);
+      shackle.position.set(0, 0.5, 0);
+      lockGroup.add(shackle);
+
+      interactiveObjects.push(lockGroup);
+      return lockGroup;
+    }
+
+    // 5. Manifest Victory Calligraphy Plaque
+    function create3DCalligraphyPlaque() {
+      const plaqueGroup = new THREE.Group();
+      plaqueGroup.userData = {
+        name: "Manifest Victory Plaque",
+        icon: "🏺",
+        inspectText: "Gold Calligraphy Plaque: 'Inna Fatahina Laka Fathan Mubeena' (Surah Al-Fath)",
+        inspectDetails: "Proclaims the Treaty of Hudaibiyah as a Manifest Divine Victory.",
+        signatureType: "plaque"
+      };
+
+      const canvasTex = createHDTexture(createPlaqueTextureCanvas());
+      const plateGeo = new THREE.BoxGeometry(1.6, 1.2, 0.1);
+      const plateMat = new THREE.MeshStandardMaterial({ map: canvasTex, metalness: 0.85, roughness: 0.15 });
+      const plate = new THREE.Mesh(plateGeo, plateMat);
+      plaqueGroup.add(plate);
+
+      interactiveObjects.push(plaqueGroup);
+      return plaqueGroup;
+    }
+
+
+    /* Raycasting & Hover FX */
+    function onMouseMove(event) {
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(interactiveObjects, true);
+
+      const tooltip = document.getElementById('hoverTooltip');
+
+      if (intersects.length > 0) {
+        let obj = intersects[0].object;
+        while (obj.parent && !obj.userData.name) obj = obj.parent;
+
+        if (obj.userData && obj.userData.name) {
+          hoveredObject = obj;
+          document.body.style.cursor = 'pointer';
+          tooltip.classList.remove('hidden');
+          tooltip.style.left = `${event.clientX}px`;
+          tooltip.style.top = `${event.clientY}px`;
+          document.getElementById('tooltipIcon').innerText = obj.userData.icon || "🔍";
+          document.getElementById('tooltipText').innerText = `${obj.userData.name} (Click to Inspect)`;
+          return;
+        }
+      }
+
+      hoveredObject = null;
+      document.body.style.cursor = 'default';
+      tooltip.classList.add('hidden');
+    }
+
+    function onCanvasClick() {
+      if (hoveredObject && hoveredObject.userData.name) {
+        playSynthSound(650, 'sine', 0.12);
+        
+        const mission = activeCase.missions[currentState.currentMissionIdx];
+        if (!currentState.collectedItems.includes(hoveredObject.userData.name)) {
+          currentState.collectedItems.push(hoveredObject.userData.name);
+          updateHUD();
+        }
+
+        open3DInspectorModal(hoveredObject.userData);
+      }
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (roomLights.length > 0) {
+        roomLights.forEach(light => {
+          light.intensity = 2.6 + Math.sin(Date.now() * 0.008) * 0.4 + (Math.random() - 0.5) * 0.1;
+        });
+      }
+
+      interactiveObjects.forEach(obj => {
+        obj.rotation.y += 0.004;
+      });
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+
+    /* =========================================================================
+       5. ENHANCED CLOSE-UP 360° ITEM INSPECTOR & HIGH-RES MAGNIFIER
+       ========================================================================= */
+    function open3DInspectorModal(itemData) {
+      const backdrop = document.getElementById('modalBackdrop');
+      const content = document.getElementById('modalContent');
+
+      content.innerHTML = `
+        <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl font-bold z-20">&times;</button>
+        
+        <div class="flex items-center gap-2 text-xs font-black uppercase text-amber-400 tracking-wider mb-1">
+          <span>🔍 3D Evidence & Inscription Inspector</span>
+        </div>
+        <h2 class="text-xl md:text-2xl font-black text-white mb-2 flex items-center gap-2">
+          <span>${itemData.icon || '📜'}</span>
+          <span>${itemData.name}</span>
+        </h2>
+
+        <!-- 3D Canvas Window with Dynamic Studio Lighting -->
+        <div class="w-full h-64 md:h-72 rounded-xl bg-gradient-to-b from-slate-950 to-slate-900 border border-amber-500/40 relative overflow-hidden my-2 shadow-2xl" id="inspector-canvas-container">
+          <div class="absolute bottom-2 left-2 z-10 glass-pill px-3 py-1 rounded-full text-[10px] text-amber-300 font-bold border border-amber-500/30 pointer-events-none flex items-center gap-1.5">
+            <span>🔄 Drag 360° to Orbit</span>
+            <span>&bull;</span>
+            <span>🔍 Scroll to Zoom</span>
+          </div>
+        </div>
+
+        <!-- MAGNIFIED HIGH-RES SIGNATURE / INSCRIPTION CANVAS DISPLAY -->
+        <div class="p-3.5 rounded-xl bg-slate-900/90 border border-amber-500/30 mb-3 flex flex-col md:flex-row items-center gap-3">
+          <div class="w-full md:w-56 h-40 rounded-lg bg-slate-950 border border-amber-400/50 overflow-hidden flex items-center justify-center shrink-0 shadow-inner p-1">
+            <canvas id="magnifiedCanvas" class="w-full h-full object-contain rounded"></canvas>
+          </div>
+          <div class="space-y-1.5 text-left text-xs">
+            <div class="text-[10px] uppercase font-black text-amber-400 tracking-wider flex items-center gap-1">
+              <span>🔬 High-Resolution Inscription Magnifier</span>
+            </div>
+            <p class="font-bold text-slate-100 text-sm leading-snug">${itemData.inspectText || "Historical artifact discovered inside the chamber."}</p>
+            <p class="text-slate-300 leading-relaxed text-[11px]">${itemData.inspectDetails || ""}</p>
+          </div>
+        </div>
+
+        <div class="flex gap-2">
+          <button onclick="openChamberLockModal()" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 font-bold text-slate-950 text-xs uppercase tracking-wider transition shadow-lg hover:shadow-amber-500/20 active:scale-98">
+            🔓 Open Chamber Door Lock
+          </button>
+        </div>
+      `;
+
+      backdrop.classList.remove('hidden');
+      setTimeout(() => {
+        initInspector3DCanvas(itemData);
+        drawMagnifiedSignature(itemData);
+      }, 60);
+    }
+
+    // Render Magnified Signature directly into modal canvas
+    function drawMagnifiedSignature(itemData) {
+      const magCanvas = document.getElementById('magnifiedCanvas');
+      if (!magCanvas) return;
+      
+      let sourceCanvas;
+      if (itemData.signatureType === 'scroll' || itemData.name.includes("Scroll")) {
+        sourceCanvas = createScrollTextureCanvas();
+      } else if (itemData.signatureType === 'dagger' || itemData.name.includes("Dagger")) {
+        sourceCanvas = createDaggerTextureCanvas();
+      } else if (itemData.signatureType === 'ring' || itemData.name.includes("Ring")) {
+        sourceCanvas = createRingTextureCanvas();
+      } else if (itemData.signatureType === 'lock' || itemData.name.includes("Lock")) {
+        sourceCanvas = createPadlockTextureCanvas();
+      } else {
+        sourceCanvas = createPlaqueTextureCanvas();
+      }
+
+      magCanvas.width = sourceCanvas.width;
+      magCanvas.height = sourceCanvas.height;
+      const ctx = magCanvas.getContext('2d');
+      ctx.drawImage(sourceCanvas, 0, 0);
+    }
+
+    function initInspector3DCanvas(itemData) {
+      const container = document.getElementById('inspector-canvas-container');
+      if (!container) return;
+
+      inspectorScene = new THREE.Scene();
+      inspectorScene.background = new THREE.Color(0x0a0c18);
+
+      const aspect = container.clientWidth / container.clientHeight;
+      inspectorCamera = new THREE.PerspectiveCamera(40, aspect, 0.1, 50);
+
+      inspectorRenderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+      inspectorRenderer.setSize(container.clientWidth, container.clientHeight);
+      inspectorRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      inspectorRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+      inspectorRenderer.toneMappingExposure = 1.35;
+      container.appendChild(inspectorRenderer.domElement);
+
+      inspectorControls = new THREE.OrbitControls(inspectorCamera, inspectorRenderer.domElement);
+      inspectorControls.enableDamping = true;
+      inspectorControls.dampingFactor = 0.08;
+      inspectorControls.autoRotate = true;
+      inspectorControls.autoRotateSpeed = 1.8;
+      inspectorControls.enableZoom = true;
+      inspectorControls.minDistance = 0.8;
+      inspectorControls.maxDistance = 4.5;
+
+      inspectorControls.addEventListener('start', () => { inspectorControls.autoRotate = false; });
+
+      // --- BRIGHT HIGH-CLARITY 360 STUDIO LIGHTING SETUP ---
+      const keyLight = new THREE.DirectionalLight(0xffffff, 2.8);
+      keyLight.position.set(2, 4, 6);
+      inspectorScene.add(keyLight);
+
+      const rimLight = new THREE.DirectionalLight(0x76a0d0, 1.8);
+      rimLight.position.set(-4, 3, -4);
+      inspectorScene.add(rimLight);
+
+      const fillLight = new THREE.DirectionalLight(0xffecd1, 1.6);
+      fillLight.position.set(-3, -2, 3);
+      inspectorScene.add(fillLight);
+
+      const ambLight = new THREE.AmbientLight(0xffffff, 0.9);
+      inspectorScene.add(ambLight);
+
+      const topPoint = new THREE.PointLight(0xffffff, 2.0, 10);
+      topPoint.position.set(0, 3, 2);
+      inspectorScene.add(topPoint);
+
+      let clonedItem;
+      let camDistance = 2.0;
+
+      if (itemData.name.includes("Scroll")) {
+        clonedItem = create3DParchmentScroll();
+        clonedItem.rotation.x = 0.2;
+        camDistance = 1.9;
+      } else if (itemData.name.includes("Dagger")) {
+        clonedItem = create3DPilgrimDagger();
+        clonedItem.rotation.y = Math.PI / 4;
+        camDistance = 1.7;
+      } else if (itemData.name.includes("Ring")) {
+        clonedItem = create3DSilverSignetRing();
+        clonedItem.scale.set(1.8, 1.8, 1.8);
+        camDistance = 1.6;
+      } else if (itemData.name.includes("Lock")) {
+        clonedItem = create3DCombinationPadlock();
+        clonedItem.scale.set(1.6, 1.6, 1.6);
+        camDistance = 1.5;
+      } else {
+        clonedItem = create3DCalligraphyPlaque();
+        camDistance = 1.8;
+      }
+
+      clonedItem.position.set(0, 0, 0);
+      inspectorScene.add(clonedItem);
+
+      inspectorCamera.position.set(0, 0.1, camDistance);
+      inspectorControls.target.set(0, 0, 0);
+      inspectorControls.update();
+
+      function animateInspector() {
+        if (!document.getElementById('inspector-canvas-container')) return;
+        requestAnimationFrame(animateInspector);
+        inspectorControls.update();
+        inspectorRenderer.render(inspectorScene, inspectorCamera);
+      }
+      animateInspector();
+    }
+
+
+    /* =========================================================================
+       6. CHAMBER DOOR LOCK & QUIZ CONTROLLER
+       ========================================================================= */
+
+    function updateHUD() {
+      const mission = activeCase.missions[currentState.currentMissionIdx];
+      document.getElementById('hudCaseTitle').innerText = activeCase.title;
+      document.getElementById('missionBadge').innerText = currentState.currentMissionIdx + 1;
+      document.getElementById('missionTitleText').innerText = `Room ${currentState.currentMissionIdx + 1}: ${mission.title}`;
+
+      const invContainer = document.getElementById('inventoryContainer');
+      invContainer.innerHTML = activeCase.missions.map((m) => {
+        const isCollected = currentState.collectedItems.includes(m.clueItemName);
+        return `
+          <button onclick="inspectInventoryItem('${m.clueItemName}')" class="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+            isCollected 
+              ? 'bg-amber-500/20 border border-amber-400 text-amber-300 shadow-md hover:bg-amber-500/30' 
+              : 'bg-slate-900/60 border border-slate-800 text-slate-500 opacity-60'
+          }">
+            <span>${isCollected ? m.clueIcon : '🔒'}</span>
+            <span class="whitespace-nowrap">${m.clueItemName}</span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function inspectInventoryItem(itemName) {
+      open3DInspectorModal({
+        name: itemName,
+        icon: "📜",
+        inspectText: `Item stored in room inventory.`,
+        inspectDetails: `Examine dial numbers, signatures, and inscriptions closely.`
+      });
+    }
+
+    function openChamberLockModal() {
+      const mission = activeCase.missions[currentState.currentMissionIdx];
+      const backdrop = document.getElementById('modalBackdrop');
+      const content = document.getElementById('modalContent');
+
+      content.innerHTML = `
+        <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl font-bold">&times;</button>
+        
+        <div class="flex items-center gap-2 text-xs uppercase font-black text-amber-400 tracking-wider mb-1">
+          <span>🔓 Room ${currentState.currentMissionIdx + 1} Exit Door Mechanism</span>
+        </div>
+        <h2 class="text-xl md:text-2xl font-black text-white mb-2">${mission.title}</h2>
+
+        <div class="p-4 rounded-xl bg-slate-900/80 border border-amber-500/20 text-slate-300 text-xs md:text-sm leading-relaxed mb-4">
+          ${mission.story}
+        </div>
+
+        <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-700/80 mb-2">
+          <label class="block text-xs font-bold uppercase text-amber-400 mb-2">
+            ❓ Door Combination Key Code Challenge:
+          </label>
+          <p class="text-xs md:text-sm text-slate-100 font-semibold mb-4">${mission.question}</p>
+
+          <div class="grid grid-cols-1 gap-2">
+            ${mission.options.map((opt, i) => `
+              <button onclick="submitQuizAnswer(${i})" class="w-full text-left p-3 rounded-lg bg-slate-800/80 hover:bg-amber-500/20 border border-slate-700 hover:border-amber-400 text-xs md:text-sm font-semibold text-slate-200 hover:text-amber-300 transition flex items-center justify-between">
+                <span><strong class="text-amber-400 mr-2">${String.fromCharCode(65 + i)}.</strong> ${opt}</span>
+                <span>🔑</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+
+      backdrop.classList.remove('hidden');
+    }
+
+    function submitQuizAnswer(optIdx) {
+      const mission = activeCase.missions[currentState.currentMissionIdx];
+      if (optIdx === mission.correctOpt) {
+        playSuccessChime();
+        if (!currentState.collectedItems.includes(mission.clueItemName)) {
+          currentState.collectedItems.push(mission.clueItemName);
+        }
+        updateHUD();
+
+        const content = document.getElementById('modalContent');
+        const isLast = currentState.currentMissionIdx >= activeCase.missions.length - 1;
+
+        content.innerHTML = `
+          <div class="text-center py-6">
+            <div class="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-400 text-emerald-400 text-3xl flex items-center justify-center mx-auto mb-4 animate-bounce">
+              ✓
+            </div>
+            <h2 class="text-2xl font-black text-emerald-300 mb-2">Chamber Door Unlocked!</h2>
+            <p class="text-sm text-slate-300 mb-6">You successfully deduced the historic key for <strong>"${mission.clueItemName}"</strong>.</p>
+
+            ${isLast ? `
+              <button onclick="showCertificate()" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 font-bold text-slate-950 text-xs uppercase tracking-wider shadow-lg hover:shadow-amber-500/30 transition">
+                🏆 View Final Escape Certificate & Report
+              </button>
+            ` : `
+              <button onclick="nextMission()" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 font-bold text-slate-950 text-xs uppercase tracking-wider shadow-lg hover:shadow-amber-500/30 transition">
+                Enter Room ${currentState.currentMissionIdx + 2} &rarr;
+              </button>
+            `}
+          </div>
+        `;
+      } else {
+        playErrorBuzz();
+        alert("Incorrect key combination! Inspect room props for historical evidence.");
+      }
+    }
+
+    function nextMission() {
+      closeModal();
+      currentState.currentMissionIdx++;
+      loadRoomArchitecture(currentState.currentMissionIdx);
+      updateHUD();
+    }
+
+    function closeModal() {
+      document.getElementById('modalBackdrop').classList.add('hidden');
+    }
+
+    function showCertificate() {
+      const backdrop = document.getElementById('modalBackdrop');
+      const content = document.getElementById('modalContent');
+
+      content.innerHTML = `
+        <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl font-bold">&times;</button>
+        
+        <div class="text-center p-2 border-2 border-amber-500/50 rounded-xl bg-slate-900/90">
+          <div class="text-xs font-black uppercase text-amber-400 tracking-widest mb-1">Archive Completion Record</div>
+          <h2 class="text-2xl font-black text-white mb-1">${activeCase.title}</h2>
+          <div class="text-xs text-slate-400 mb-4">3D Escape Room Case Solved</div>
+
+          <div class="my-4 py-3 px-4 rounded-lg bg-amber-500/10 border border-amber-500/30 text-left text-xs md:text-sm text-slate-200 space-y-2">
+            <p class="font-bold text-amber-300">🔑 Strategic Diplomacy Takeaways:</p>
+            <ul class="list-disc pl-4 space-y-1 text-slate-300">
+              <li>Patience over Provocation: Unarmed pilgrimage emphasized diplomatic goodwill.</li>
+              <li>Flexibility in Form, Firmness in Substance: Compromising wording yielded long-term peace.</li>
+              <li>Clear Victory: Post-pact armistice allowed Islam to expand exponentially.</li>
+            </ul>
+          </div>
+
+          <div class="flex items-center justify-between pt-3 border-t border-slate-800 text-xs text-slate-400">
+            <span>Status: <strong class="text-emerald-400">ALL ROOMS ESCAPED (100%)</strong></span>
+            <span>Items Collected: ${currentState.collectedItems.length} / ${activeCase.missions.length}</span>
+          </div>
+
+          <div class="flex gap-2 mt-5">
+            <button onclick="restartCase()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs uppercase tracking-wider transition">
+              🔄 Replay Rooms
+            </button>
+          </div>
+        </div>
+      `;
+
+      backdrop.classList.remove('hidden');
+    }
+
+    function restartCase() {
+      currentState.currentMissionIdx = 0;
+      currentState.collectedItems = [];
+      closeModal();
+      loadRoomArchitecture(0);
+      updateHUD();
+    }
+
+    /* =========================================================================
+       7. PROTECTED ADMIN ACCESS & DIRECTOR MODE
+       ========================================================================= */
+
+    function handleBadgeClick() {
+      badgeClickCount++;
+      if (badgeClickTimer) clearTimeout(badgeClickTimer);
+      
+      badgeClickTimer = setTimeout(() => {
+        if (badgeClickCount >= 3) {
+          promptAdminLogin();
+        }
+        badgeClickCount = 0;
+      }, 500);
+    }
+
+    function promptAdminLogin() {
+      const pin = prompt("Enter Admin Passcode for Director Mode Access:");
+      if (pin === "admin" || pin === "628" || pin === "1400") {
+        playSuccessChime();
+        openAdminModal();
+      } else if (pin !== null) {
+        playErrorBuzz();
+        alert("Access Denied: Invalid Admin Passcode");
+      }
+    }
+
+    // Keyboard Shortcut for Admin Access (Ctrl + Shift + A)
+    window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+        e.preventDefault();
+        promptAdminLogin();
+      }
+    });
+
+    function openAdminModal() {
+      const backdrop = document.getElementById('modalBackdrop');
+      const content = document.getElementById('modalContent');
+
+      content.innerHTML = `
+        <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl font-bold">&times;</button>
+        
+        <div class="flex items-center gap-2 text-xs uppercase font-black text-amber-400 tracking-wider mb-1">
+          <span>⚙️ Protected Director Mode</span>
+        </div>
+        <h2 class="text-xl font-black text-white mb-4">Edit Room Architecture & Case Data</h2>
+
+        <div class="space-y-4 text-xs">
+          <div>
+            <label class="block font-bold text-slate-300 uppercase mb-1">Case Title</label>
+            <input id="adminCaseTitle" type="text" value="${activeCase.title}" class="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-semibold focus:border-amber-400 focus:outline-none">
+          </div>
+
+          <div class="border-t border-slate-800 pt-3">
+            <h3 class="font-bold text-amber-400 uppercase mb-2">3D Room Chambers (${activeCase.missions.length})</h3>
+            <div class="space-y-3 max-h-60 overflow-y-auto pr-1">
+              ${activeCase.missions.map((m, idx) => `
+                <div class="p-3 rounded-lg bg-slate-900/90 border border-slate-800 space-y-2">
+                  <div class="flex items-center justify-between font-bold text-slate-200">
+                    <span>Room ${idx + 1} Theme:</span>
+                    <select id="theme_${idx}" class="bg-slate-800 text-amber-300 rounded px-2 py-1 text-[11px] border border-slate-700">
+                      <option value="desert_room" ${m.theme === 'desert_room' ? 'selected' : ''}>Tent Enclosure Room</option>
+                      <option value="pavilion_room" ${m.theme === 'pavilion_room' ? 'selected' : ''}>Negotiating Pavilion Room</option>
+                      <option value="courtyard_room" ${m.theme === 'courtyard_room' ? 'selected' : ''}>Courtyard Room</option>
+                      <option value="gate_room" ${m.theme === 'gate_room' ? 'selected' : ''}>Fortress Gate Room</option>
+                      <option value="sanctuary_room" ${m.theme === 'sanctuary_room' ? 'selected' : ''}>Sanctuary Victory Hall</option>
+                    </select>
+                  </div>
+                  <input id="mTitle_${idx}" type="text" value="${m.title}" class="w-full p-2 rounded bg-slate-800 border border-slate-700 text-white font-medium">
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <div class="flex gap-2 pt-3 border-t border-slate-800">
+            <button onclick="saveAdminChanges()" class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs uppercase tracking-wider transition">
+              💾 Save Room Configuration
+            </button>
+            <button onclick="resetDefaultCase()" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase transition whitespace-nowrap">
+              Reset Default
+            </button>
+          </div>
+        </div>
+      `;
+
+      backdrop.classList.remove('hidden');
+    }
+
+    function saveAdminChanges() {
+      activeCase.title = document.getElementById('adminCaseTitle').value.trim() || activeCase.title;
+      activeCase.missions.forEach((m, idx) => {
+        const titleEl = document.getElementById(`mTitle_${idx}`);
+        const themeEl = document.getElementById(`theme_${idx}`);
+        if (titleEl) m.title = titleEl.value;
+        if (themeEl) m.theme = themeEl.value;
+      });
+
+      localStorage.setItem('archive_room_case_v1', JSON.stringify(activeCase));
+      playSuccessChime();
+      alert("Room configurations updated!");
+      closeModal();
+      loadRoomArchitecture(currentState.currentMissionIdx);
+      updateHUD();
+    }
+
+    function resetDefaultCase() {
+      if (confirm("Reset to default 3D room escape parameters?")) {
+        localStorage.removeItem('archive_room_case_v1');
+        activeCase = JSON.parse(JSON.stringify(DEFAULT_CASE));
+        playSuccessChime();
+        closeModal();
+        restartCase();
+      }
+    }
+
+    /* =========================================================================
+       8. INITIALIZATION
+       ========================================================================= */
+    window.addEventListener('DOMContentLoaded', () => {
+      init3D();
+      updateHUD();
+    });
+  </script>
+</body>
+</html>
