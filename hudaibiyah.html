@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>THE ARCHIVE — 3D Room Escape: Treaty of Hudaibiyah</title>
   
   <!-- Tailwind CSS CDN -->
@@ -13,8 +13,8 @@
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
   <!-- Chosen Palette: Warm Antique Amber, Obsidian, Roasted Mahogany & Aged Brass -->
-  <!-- Application Structure Plan: Full 3D interior escape room chambers with procedural high-resolution dynamic canvas textures for authentic parchment, wax seals, brass sheath engravings, signet rings, and crisp padlock dial numbers. The 3D Inspector modal features enhanced 360° studio lighting, zoom controls, and a high-res inscription magnifier panel to guarantee complete visual clarity. Director Mode is restricted to authorized admin access via passcode verification. -->
-  <!-- Visualization & Content Choices: Procedural Three.js Dynamic Canvas Textures -> High-Res Lock Dial Markings, Parchment, Wax Seals & Gold Calligraphy -> 360° Interactive Studio Lighting Inspection + Magnified Inscription Panel -> Three.js WebGL & Web Audio API (NO SVG, NO MERMAID). -->
+  <!-- Application Structure Plan: Full 6-sided interior escape room enclosures with dynamic viewport height (100dvh) mobile HUD layout. Dedicated touch-optimized Floating Action Button (FAB) guarantees door lock modal accessibility across all mobile devices regardless of viewport size or browser toolbar overflow. Full 360° interactive 3D inspection, procedural high-res canvas textures, audio synth, and passcode-protected admin director mode. -->
+  <!-- Visualization & Content Choices: Three.js WebGL 3D Enclosure + Procedural Canvas Textures -> Lock Dial Markings, Parchment, Seals & Inscription Magnifier -> 360° Dynamic Inspector + Mobile Touch Controls (NO SVG, NO MERMAID). -->
   <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
 
   <style>
@@ -22,15 +22,26 @@
       --amber: #e0a94f;
       --amber-bright: #ffd275;
       --bg-dark: #060712;
-      --card-bg: rgba(12, 14, 30, 0.94);
+      --card-bg: rgba(12, 14, 30, 0.95);
     }
 
-    body {
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      height: 100dvh;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
       background-color: var(--bg-dark);
       color: #f1f5f9;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      overflow: hidden;
       user-select: none;
+      touch-action: none;
     }
 
     #webgl-container, #inspector-canvas-container {
@@ -38,12 +49,14 @@
       inset: 0;
       z-index: 0;
       outline: none;
+      touch-action: none;
     }
     #webgl-container canvas, #inspector-canvas-container canvas {
       display: block;
       width: 100%;
       height: 100%;
       cursor: grab;
+      touch-action: none;
     }
     .dragging canvas {
       cursor: grabbing !important;
@@ -54,7 +67,7 @@
       inset: 0;
       z-index: 1;
       pointer-events: none;
-      box-shadow: inset 0 0 180px 80px rgba(0, 0, 0, 0.88);
+      box-shadow: inset 0 0 140px 60px rgba(0, 0, 0, 0.92);
     }
 
     .glass-card {
@@ -62,13 +75,13 @@
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       border: 1px solid rgba(224, 169, 79, 0.35);
-      box-shadow: 0 25px 70px rgba(0,0,0,0.85);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.85);
     }
 
     .glass-pill {
-      background: rgba(8, 10, 22, 0.88);
+      background: rgba(8, 10, 22, 0.92);
       backdrop-filter: blur(14px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.18);
     }
 
     .orbit-hint {
@@ -76,24 +89,27 @@
     }
     @keyframes floatHint {
       0%, 100% { transform: translate(-50%, 0); }
-      50% { transform: translate(-50%, -6px); }
+      50% { transform: translate(-50%, -5px); }
     }
 
     @keyframes modalSlide {
-      from { opacity: 0; transform: scale(0.95) translateY(20px); }
+      from { opacity: 0; transform: scale(0.95) translateY(15px); }
       to { opacity: 1; transform: scale(1) translateY(0); }
     }
     .animate-modal {
-      animation: modalSlide 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+      animation: modalSlide 0.22s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
     }
 
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
     ::-webkit-scrollbar-track { background: rgba(8, 10, 22, 0.8); }
     ::-webkit-scrollbar-thumb { background: rgba(224,169,79,0.4); border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: rgba(224,169,79,0.8); }
   </style>
 </head>
-<body class="relative w-screen h-screen overflow-hidden">
+<body class="relative w-full h-full h-[100dvh] overflow-hidden select-none">
 
   <!-- 3D WebGL Interior Room Container -->
   <div id="webgl-container"></div>
@@ -105,85 +121,92 @@
     <span id="tooltipText">Inspect Room Prop</span>
   </div>
 
-  <!-- MAIN HUD OVERLAY -->
-  <div class="relative z-10 w-full h-full flex flex-col justify-between p-4 md:p-6 pointer-events-none">
+  <!-- MAIN HUD OVERLAY (Optimized Dynamic Mobile Viewport Layout) -->
+  <div class="relative z-10 w-full h-full h-[100dvh] flex flex-col justify-between p-2.5 sm:p-4 md:p-6 pointer-events-none pb-[calc(10px+env(safe-area-inset-bottom))]">
     
     <!-- Top Bar Navigation HUD -->
-    <header class="w-full max-w-6xl mx-auto flex items-center justify-between gap-4 pointer-events-auto">
-      <!-- Title & Chamber Badge (Clicking 3x triggers Admin PIN modal) -->
-      <div class="flex items-center gap-3 cursor-pointer group" title="Click to inspect case info" onclick="handleBadgeClick()">
-        <div class="w-11 h-11 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold text-2xl shadow-lg group-hover:scale-105 transition-transform">
+    <header class="w-full max-w-6xl mx-auto flex items-center justify-between gap-2 pointer-events-auto">
+      <!-- Title & Chamber Badge -->
+      <div class="flex items-center gap-2 cursor-pointer group" title="Click to inspect case info" onclick="handleBadgeClick()">
+        <div class="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 font-bold text-lg sm:text-2xl shadow-lg group-hover:scale-105 transition-transform shrink-0">
           🏰
         </div>
-        <div>
-          <div class="flex items-center gap-2">
-            <span class="text-[10px] font-extrabold uppercase tracking-widest text-amber-400">3D Escape Room Architecture</span>
-            <span class="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">HISTORICAL EXPERIENCE</span>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5">
+            <span class="text-[9px] sm:text-[10px] font-extrabold uppercase tracking-widest text-amber-400 truncate">3D Escape Architecture</span>
+            <span class="hidden sm:inline-block text-[9px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold">HISTORICAL</span>
           </div>
-          <h1 id="hudCaseTitle" class="text-sm md:text-base font-black text-slate-100 drop-shadow">Treaty of Hudaibiyah (628 CE)</h1>
+          <h1 id="hudCaseTitle" class="text-xs sm:text-sm md:text-base font-black text-slate-100 drop-shadow truncate max-w-[150px] sm:max-w-md">Treaty of Hudaibiyah (628 CE)</h1>
         </div>
       </div>
 
       <!-- Header Action Controls -->
-      <div class="flex items-center gap-2">
-        <button id="soundToggleBtn" onclick="toggleAudio()" class="glass-pill px-3.5 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-amber-300 border border-slate-700 hover:border-amber-500/50 transition flex items-center gap-1.5">
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button id="soundToggleBtn" onclick="toggleAudio()" class="glass-pill px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold text-slate-300 hover:text-amber-300 border border-slate-700 hover:border-amber-500/50 transition flex items-center gap-1 min-h-[38px]">
           <span id="soundIcon">🔊</span>
-          <span id="soundStatusText">Sound ON</span>
+          <span id="soundStatusText" class="hidden sm:inline">Sound ON</span>
         </button>
-        <button onclick="restartCase()" class="glass-pill px-3 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 transition">
-          🔄 Reset Room
+        <button onclick="restartCase()" class="glass-pill px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-[11px] sm:text-xs font-bold text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 transition min-h-[38px]">
+          🔄 <span class="hidden sm:inline">Reset</span>
         </button>
       </div>
     </header>
 
     <!-- Navigation Camera Control Hint -->
-    <div id="orbitHint" class="orbit-hint fixed bottom-28 left-1/2 -translate-x-1/2 glass-pill px-5 py-2 rounded-full text-xs text-amber-300 font-semibold border border-amber-500/30 shadow-2xl pointer-events-none flex items-center gap-2">
-      <span>🚪</span> Look Around Room (Drag 360°) &bull; Scroll to Zoom &bull; Click 3D Props inside the Room
+    <div id="orbitHint" class="orbit-hint fixed bottom-28 sm:bottom-28 left-1/2 -translate-x-1/2 glass-pill px-3 py-1 sm:px-4 sm:py-1.5 rounded-full text-[9px] sm:text-xs text-amber-300 font-semibold border border-amber-500/30 shadow-2xl pointer-events-none flex items-center gap-1 whitespace-nowrap opacity-90">
+      <span>🚪</span> Drag 360° &bull; Touch Props to Inspect
     </div>
 
     <!-- Bottom HUD Bar: Chamber Status & Room Inventory -->
-    <footer class="w-full max-w-5xl mx-auto flex flex-col items-center gap-3 pointer-events-auto">
+    <footer class="w-full max-w-5xl mx-auto flex flex-col items-center gap-1.5 pointer-events-auto">
       
       <!-- Chamber Progress Card -->
-      <div class="w-full glass-card p-4 rounded-2xl flex flex-col lg:flex-row items-center justify-between gap-4 border border-amber-500/30">
+      <div class="w-full glass-card p-2.5 sm:p-4 rounded-2xl flex flex-col gap-2 border border-amber-500/30 shadow-2xl">
         
-        <!-- Active Room Info -->
-        <div class="flex items-center gap-3">
-          <div id="missionBadge" class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 font-black flex items-center justify-center text-base shadow-md">
-            1
+        <!-- Active Room Info + Dedicated Chamber Door Lock Button -->
+        <div class="flex items-center justify-between gap-2 w-full">
+          <!-- Room Title & Badge -->
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <div id="missionBadge" class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 text-slate-950 font-black flex items-center justify-center text-xs sm:text-base shadow-md shrink-0">
+              1
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="text-[8px] sm:text-[10px] uppercase font-black text-amber-400 tracking-wider">Active 3D Chamber</div>
+              <div id="missionTitleText" class="text-xs sm:text-sm md:text-base font-bold text-white truncate">Room 1: Bedouin Encampment Tent Enclosure</div>
+            </div>
           </div>
-          <div>
-            <div class="text-[10px] uppercase font-black text-amber-400 tracking-wider">Active 3D Chamber Room</div>
-            <div id="missionTitleText" class="text-sm md:text-base font-bold text-white">Room 1: Bedouin Encampment Tent Enclosure</div>
-          </div>
-        </div>
 
-        <!-- Inventory Item Slots -->
-        <div class="flex items-center gap-2 overflow-x-auto max-w-full py-1" id="inventoryContainer">
-          <!-- Dynamic inventory buttons populated by JS -->
-        </div>
-
-        <!-- Room Chamber Door Button -->
-        <div class="flex items-center gap-2 w-full lg:w-auto">
-          <button id="inspectRoomBtn" onclick="openChamberLockModal()" class="w-full lg:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider transition shadow-lg hover:shadow-amber-500/20 active:scale-95 whitespace-nowrap flex items-center justify-center gap-1.5">
-            🔓 Chamber Door Lock
+          <!-- PRIMARY CHAMBER DOOR LOCK BUTTON (ALWAYS VISIBLE & HIGH-PRIORITY) -->
+          <button id="inspectRoomBtn" onclick="openChamberLockModal()" class="shrink-0 px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-[11px] sm:text-xs uppercase tracking-wider transition shadow-lg hover:shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-1.5 min-h-[42px] border border-amber-300/40">
+            <span>🔓</span>
+            <span class="inline">Chamber Lock</span>
           </button>
+        </div>
+
+        <!-- Inventory Item Slots Row -->
+        <div class="flex items-center gap-1.5 overflow-x-auto w-full no-scrollbar pt-1 border-t border-slate-800/80" id="inventoryContainer">
+          <!-- Dynamic inventory buttons populated by JS -->
         </div>
       </div>
 
-      <!-- Subtle Footer Bar with Hidden Admin Lock Trigger -->
-      <div class="flex items-center justify-between w-full px-2 text-[10px] text-slate-500">
-        <span>Treaty of Hudaibiyah Historical Archive</span>
-        <button onclick="promptAdminLogin()" class="hover:text-amber-400/80 transition flex items-center gap-1 focus:outline-none">
+      <!-- Footer Bar with Hidden Admin Lock Trigger -->
+      <div class="flex items-center justify-between w-full px-2 text-[9px] text-slate-500">
+        <span class="truncate">Treaty of Hudaibiyah Historical Archive</span>
+        <button onclick="promptAdminLogin()" class="hover:text-amber-400/80 transition flex items-center gap-1 focus:outline-none shrink-0 ml-2 py-0.5">
           <span>🔒</span> Admin Access
         </button>
       </div>
     </footer>
   </div>
 
+  <!-- FLOATING TOUCH ACTION BUTTON FOR MOBILE DEVICES (100% VISIBILITY GUARANTEE) -->
+  <button onclick="openChamberLockModal()" class="fixed bottom-20 right-3 z-30 sm:hidden bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black p-3 rounded-full shadow-2xl border-2 border-amber-300 flex items-center justify-center active:scale-90 transition" title="Open Door Lock Quiz">
+    <span class="text-xl">🔓</span>
+  </button>
+
   <!-- MODAL CONTAINER (Inspectors, Door Padlock, Quizzes, Certificates, Admin) -->
-  <div id="modalBackdrop" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-    <div id="modalContent" class="glass-card w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-2xl p-6 relative border border-amber-500/40 animate-modal text-slate-100">
+  <div id="modalBackdrop" class="fixed inset-0 z-50 hidden bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+    <div id="modalContent" class="glass-card w-full max-w-xl max-h-[88vh] overflow-y-auto rounded-2xl p-4 sm:p-6 relative border border-amber-500/40 animate-modal text-slate-100">
       <!-- Dynamic Content Injected Here -->
     </div>
   </div>
@@ -205,7 +228,7 @@
           clueIcon: "🗡️",
           unlockWord: "1400",
           story: "Inside this Bedouin tent enclosure, 1,400 Muslims encamped at Hudaibiyah in March 628 CE. Clad only in white pilgrim garments (Ihram), they carried no weapons of war—only sheathed travel daggers.",
-          question: "Examine the sheath engraving on the Pilgrim Dagger sitting on the wooden low table inside the room. How many unarmed pilgrims marched to Hudaibiyah?",
+          question: "Examine the sheath engraving on the Pilgrim Dagger sitting on the wooden table inside the room. How many unarmed pilgrims marched to Hudaibiyah?",
           options: ["500 Pilgrims", "1,400 Pilgrims", "3,000 Pilgrims", "10,000 Pilgrims"],
           correctOpt: 1
         },
@@ -240,7 +263,7 @@
           clueItemName: "Heavy Iron Door Lock",
           clueIcon: "🔒",
           unlockWord: "10",
-          story: "This stone fortress room controls access to Makkah. The Treaty of Hudaibiyah guaranteed a 10-year armistice, ending hostilies and allowing peaceful trade across Arabia.",
+          story: "This stone fortress room controls access to Makkah. The Treaty of Hudaibiyah guaranteed a 10-year armistice, ending hostilities and allowing peaceful trade across Arabia.",
           question: "Examine the engraved combination dial on the Heavy Iron Door Lock. Select the door lock code matching the exact number of years of armistice guaranteed by the treaty.",
           options: ["3 Years", "5 Years", "10 Years", "20 Years"],
           correctOpt: 2
@@ -319,14 +342,12 @@
        3. CANVAS 2D PROCEDURAL TEXTURE GENERATORS (HIGH-RES HD)
        ========================================================================= */
 
-    // 1. Treaty Scroll Parchment with Legible Ink & Wax Seal Signature "SUHAIL"
     function createScrollTextureCanvas() {
       const canvas = document.createElement('canvas');
       canvas.width = 1024;
       canvas.height = 1024;
       const ctx = canvas.getContext('2d');
 
-      // Aged Parchment Background
       const grad = ctx.createRadialGradient(512, 512, 50, 512, 512, 600);
       grad.addColorStop(0, '#fbf3db');
       grad.addColorStop(0.7, '#e8d5a7');
@@ -334,20 +355,17 @@
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 1024, 1024);
 
-      // Paper Grain & Stains
       ctx.fillStyle = 'rgba(90, 60, 20, 0.05)';
       for (let i = 0; i < 5000; i++) {
         ctx.fillRect(Math.random() * 1024, Math.random() * 1024, Math.random() * 3 + 1, Math.random() * 3 + 1);
       }
 
-      // Border Trim
       ctx.strokeStyle = '#8a5e2a';
       ctx.lineWidth = 14;
       ctx.strokeRect(30, 30, 964, 964);
       ctx.lineWidth = 4;
       ctx.strokeRect(48, 48, 928, 928);
 
-      // Calligraphy Header Text
       ctx.fillStyle = '#1c1007';
       ctx.textAlign = 'center';
       ctx.font = 'bold 38px Georgia, serif';
@@ -357,7 +375,6 @@
       ctx.fillStyle = '#4a3219';
       ctx.fillText("Official Peace Pact & 10-Year Armistice Agreement", 512, 150);
 
-      // Body Calligraphy Lines
       ctx.textAlign = 'left';
       ctx.fillStyle = '#26160a';
       ctx.font = '500 21px Georgia, serif';
@@ -372,11 +389,9 @@
         ctx.fillText(line, 80, 225 + idx * 45);
       });
 
-      // Red Wax Seal Stamp with Inscribed Signature "SUHAIL"
       ctx.save();
       ctx.translate(512, 650);
 
-      // Outer Red Wax Circle
       const waxGrad = ctx.createRadialGradient(0, 0, 10, 0, 0, 180);
       waxGrad.addColorStop(0, '#e03131');
       waxGrad.addColorStop(0.7, '#9e1818');
@@ -386,20 +401,17 @@
       ctx.arc(0, 0, 175, 0, Math.PI * 2);
       ctx.fill();
 
-      // Wax Ridge
       ctx.strokeStyle = '#ff6b6b';
       ctx.lineWidth = 8;
       ctx.beginPath();
       ctx.arc(0, 0, 152, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Inner Seal Stamp Inscription
       ctx.fillStyle = '#ffe066';
       ctx.textAlign = 'center';
       ctx.font = 'bold 30px Georgia, serif';
       ctx.fillText("OFFICIAL QURAYSHI SEAL", 0, -60);
 
-      // High Visibility Signature Text "SUHAIL"
       ctx.font = '900 68px Georgia, serif';
       ctx.fillStyle = '#ffffff';
       ctx.shadowColor = '#000000';
@@ -412,11 +424,9 @@
       ctx.fillText("Chief Envoy • Suhail ibn Amr", 0, 78);
 
       ctx.restore();
-
       return canvas;
     }
 
-    // 2. Brass Dagger Sheath Texture with "1400" Engraving
     function createDaggerTextureCanvas() {
       const canvas = document.createElement('canvas');
       canvas.width = 1024;
@@ -453,7 +463,6 @@
       return canvas;
     }
 
-    // 3. Silver Signet Ring Texture with "RIDWAN" Engraving
     function createRingTextureCanvas() {
       const canvas = document.createElement('canvas');
       canvas.width = 1024;
@@ -491,7 +500,6 @@
       return canvas;
     }
 
-    // 4. Gold Calligraphy Plaque Texture (Surah Al-Fath)
     function createPlaqueTextureCanvas() {
       const canvas = document.createElement('canvas');
       canvas.width = 1024;
@@ -529,14 +537,12 @@
       return canvas;
     }
 
-    // 5. Heavy Iron Combination Padlock Texture (HIGH RESOLUTION & EXTREMELY CLEAR NUMBERS)
     function createPadlockTextureCanvas() {
       const canvas = document.createElement('canvas');
       canvas.width = 1024;
       canvas.height = 1024;
       const ctx = canvas.getContext('2d');
 
-      // Metallic Cast Iron Background
       const bgGrad = ctx.createLinearGradient(0, 0, 1024, 1024);
       bgGrad.addColorStop(0, '#334155');
       bgGrad.addColorStop(0.5, '#1e293b');
@@ -544,7 +550,6 @@
       ctx.fillStyle = bgGrad;
       ctx.fillRect(0, 0, 1024, 1024);
 
-      // Gold Brass Frame Border
       ctx.strokeStyle = '#fbbf24';
       ctx.lineWidth = 24;
       ctx.strokeRect(30, 30, 964, 964);
@@ -553,7 +558,6 @@
       ctx.lineWidth = 8;
       ctx.strokeRect(50, 50, 924, 924);
 
-      // Title Inscription
       ctx.fillStyle = '#fbbf24';
       ctx.textAlign = 'center';
       ctx.font = 'bold 58px Georgia, serif';
@@ -566,26 +570,22 @@
       ctx.shadowBlur = 0;
       ctx.fillText("ARMISTICE DURATION CODE", 512, 210);
 
-      // Combination Dial Wheels Plate
       ctx.fillStyle = '#020617';
       ctx.fillRect(120, 280, 784, 480);
       ctx.strokeStyle = '#fbbf24';
       ctx.lineWidth = 6;
       ctx.strokeRect(120, 280, 784, 480);
 
-      // Render 3 Distinct Dial Wheels: [ 1 ] [ 0 ] [ YEARS ]
       const wheelX = [250, 512, 770];
       const numbers = ["1", "0", "YRS"];
 
       wheelX.forEach((x, idx) => {
-        // Wheel Box
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(x - 100, 320, 200, 400);
         ctx.strokeStyle = '#e2e8f0';
         ctx.lineWidth = 4;
         ctx.strokeRect(x - 100, 320, 200, 400);
 
-        // Dial Numbers - Bold White Glowing
         ctx.fillStyle = '#ffffff';
         ctx.font = idx === 2 ? '900 80px Impact, sans-serif' : '900 180px Impact, sans-serif';
         ctx.textAlign = 'center';
@@ -594,13 +594,11 @@
         ctx.fillText(numbers[idx], x, idx === 2 ? 550 : 580);
         ctx.shadowBlur = 0;
 
-        // Dial Wheel Notches
         ctx.fillStyle = '#64748b';
         ctx.fillRect(x - 80, 340, 160, 12);
         ctx.fillRect(x - 80, 680, 160, 12);
       });
 
-      // Bottom Explanatory Inscription
       ctx.fillStyle = '#fef08a';
       ctx.font = '900 64px Georgia, serif';
       ctx.shadowColor = '#000000';
@@ -617,7 +615,7 @@
 
 
     /* =========================================================================
-       4. THREE.JS 3D ROOM ARCHITECTURE ENGINE & OBJECT GENERATORS
+       4. THREE.JS 3D ROOM ARCHITECTURE ENGINE (ISOLATED & BOUNDED ROOM ENCLOSURE)
        ========================================================================= */
     let scene, camera, renderer, controls;
     let roomGroup = null;
@@ -627,22 +625,17 @@
     let hoveredObject = null;
     let roomLights = [];
 
-    // Separate Inspector Three.js instance
     let inspectorScene, inspectorCamera, inspectorRenderer, inspectorControls;
 
     function init3D() {
       const container = document.getElementById('webgl-container');
       
-      // Scene
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x060712);
-      scene.fog = new THREE.FogExp2(0x060712, 0.035);
+      scene.background = new THREE.Color(0x04050a);
 
-      // Camera inside the room space
-      camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
-      camera.position.set(0, 1.8, 5.2);
+      camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 12);
+      camera.position.set(0, 1.6, 2.2);
 
-      // WebGL Renderer
       renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.setSize(window.innerWidth, window.innerHeight);
@@ -652,20 +645,20 @@
       renderer.toneMappingExposure = 1.15;
       container.appendChild(renderer.domElement);
 
-      // Orbit Controls
       controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.05;
-      controls.maxPolarAngle = Math.PI / 2 + 0.1; 
-      controls.minPolarAngle = Math.PI / 6;
-      controls.minDistance = 1.2;
-      controls.maxDistance = 6.8;
-      controls.target.set(0, 1.2, 0);
 
-      // Event Listeners
+      controls.minDistance = 0.6;
+      controls.maxDistance = 3.2;
+      controls.maxPolarAngle = Math.PI / 2 - 0.05;
+      controls.minPolarAngle = Math.PI / 6;
+      controls.target.set(0, 1.1, -0.2);
+
       window.addEventListener('resize', onWindowResize);
       renderer.domElement.addEventListener('mousemove', onMouseMove);
       renderer.domElement.addEventListener('click', onCanvasClick);
+      renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
 
       renderer.domElement.addEventListener('mousedown', () => {
         container.classList.add('dragging');
@@ -675,105 +668,91 @@
         container.classList.remove('dragging');
       });
 
-      // Load Room 1 Architecture
       loadRoomArchitecture(currentState.currentMissionIdx);
-
-      // Animation Loop
       animate();
     }
 
-    /* Clear and build 3D Room Shell (Walls, Floor, Ceiling, Furniture, Artifacts) */
-    function loadRoomArchitecture(missionIdx) {
-      if (roomGroup) scene.remove(roomGroup);
+    function clearCurrentRoom() {
+      if (roomGroup) {
+        roomGroup.traverse((child) => {
+          if (child.isMesh) {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+              if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+              else child.material.dispose();
+            }
+          }
+        });
+        scene.remove(roomGroup);
+        roomGroup = null;
+      }
       interactiveObjects = [];
       roomLights = [];
+    }
+
+    function loadRoomArchitecture(missionIdx) {
+      clearCurrentRoom();
 
       roomGroup = new THREE.Group();
       const mission = activeCase.missions[missionIdx];
       const theme = mission ? mission.theme : 'desert_room';
 
-      // --- COMMON ROOM ENCLOSURE SHELL ---
-      const roomWidth = 9.0, roomHeight = 5.2, roomDepth = 9.0;
+      const rx = 7.0, ry = 4.5, rz = 7.0;
 
-      // Materials based on room theme
-      let wallColor = 0x241d18, floorColor = 0x3d2719, ceilingColor = 0x1a1512;
-      if (theme === 'pavilion_room') { wallColor = 0x3d1c1d; floorColor = 0x541720; ceilingColor = 0x211012; }
-      else if (theme === 'courtyard_room') { wallColor = 0x222633; floorColor = 0x171924; ceilingColor = 0x0f111a; }
-      else if (theme === 'gate_room') { wallColor = 0x1c202e; floorColor = 0x12141f; ceilingColor = 0x0c0d14; }
-      else if (theme === 'sanctuary_room') { wallColor = 0x12182b; floorColor = 0x0a0f1e; ceilingColor = 0x080b14; }
+      let wallColor = 0x241d18, floorColor = 0x3d2719;
+      if (theme === 'pavilion_room') { wallColor = 0x3d1c1d; floorColor = 0x541720; }
+      else if (theme === 'courtyard_room') { wallColor = 0x222633; floorColor = 0x171924; }
+      else if (theme === 'gate_room') { wallColor = 0x1c202e; floorColor = 0x12141f; }
+      else if (theme === 'sanctuary_room') { wallColor = 0x12182b; floorColor = 0x0a0f1e; }
 
-      const wallMat = new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.85 });
+      const roomBoxGeo = new THREE.BoxGeometry(rx, ry, rz);
+      const roomBoxMat = new THREE.MeshStandardMaterial({
+        color: wallColor,
+        roughness: 0.85,
+        side: THREE.BackSide
+      });
+      const roomShell = new THREE.Mesh(roomBoxGeo, roomBoxMat);
+      roomShell.position.set(0, ry / 2, 0);
+      roomShell.receiveShadow = true;
+      roomGroup.add(roomShell);
+
+      const floorGeo = new THREE.PlaneGeometry(rx - 0.05, rz - 0.05);
       const floorMat = new THREE.MeshStandardMaterial({ color: floorColor, roughness: 0.6 });
-      const ceilingMat = new THREE.MeshStandardMaterial({ color: ceilingColor, roughness: 0.9 });
-
-      // Floor
-      const floorGeo = new THREE.PlaneGeometry(roomWidth, roomDepth);
       const floor = new THREE.Mesh(floorGeo, floorMat);
       floor.rotation.x = -Math.PI / 2;
+      floor.position.y = 0.01;
       floor.receiveShadow = true;
       roomGroup.add(floor);
 
-      // Ceiling
-      const ceiling = new THREE.Mesh(floorGeo, ceilingMat);
-      ceiling.position.y = roomHeight;
-      ceiling.rotation.x = Math.PI / 2;
-      roomGroup.add(ceiling);
-
-      // Back Wall
-      const backWallGeo = new THREE.PlaneGeometry(roomWidth, roomHeight);
-      const backWall = new THREE.Mesh(backWallGeo, wallMat);
-      backWall.position.set(0, roomHeight / 2, -roomDepth / 2);
-      backWall.receiveShadow = true;
-      roomGroup.add(backWall);
-
-      // Left Wall
-      const sideWallGeo = new THREE.PlaneGeometry(roomDepth, roomHeight);
-      const leftWall = new THREE.Mesh(sideWallGeo, wallMat);
-      leftWall.position.set(-roomWidth / 2, roomHeight / 2, 0);
-      leftWall.rotation.y = Math.PI / 2;
-      leftWall.receiveShadow = true;
-      roomGroup.add(leftWall);
-
-      // Right Wall
-      const rightWall = new THREE.Mesh(sideWallGeo, wallMat);
-      rightWall.position.set(roomWidth / 2, roomHeight / 2, 0);
-      rightWall.rotation.y = -Math.PI / 2;
-      rightWall.receiveShadow = true;
-      roomGroup.add(rightWall);
-
-      // Wooden Support Beams
-      for (let b = -3.5; b <= 3.5; b += 2.3) {
-        const beamGeo = new THREE.BoxGeometry(0.35, 0.35, roomWidth);
-        const beamMat = new THREE.MeshStandardMaterial({ color: 0x1f140e, roughness: 0.8 });
+      for (let b = -2.8; b <= 2.8; b += 2.0) {
+        const beamGeo = new THREE.BoxGeometry(0.3, 0.3, rz - 0.1);
+        const beamMat = new THREE.MeshStandardMaterial({ color: 0x1a110a, roughness: 0.8 });
         const beam = new THREE.Mesh(beamGeo, beamMat);
-        beam.position.set(b, roomHeight - 0.2, 0);
+        beam.position.set(b, ry - 0.15, 0);
         beam.castShadow = true;
         roomGroup.add(beam);
       }
 
-      // Central Lantern
-      const lanternGeo = new THREE.CylinderGeometry(0.25, 0.35, 0.7, 12);
+      const lanternGeo = new THREE.CylinderGeometry(0.22, 0.3, 0.6, 12);
       const lanternMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.85, roughness: 0.2 });
       const lantern = new THREE.Mesh(lanternGeo, lanternMat);
-      lantern.position.set(0, roomHeight - 1.2, 0);
+      lantern.position.set(0, ry - 1.0, 0);
       roomGroup.add(lantern);
 
-      const chainGeo = new THREE.CylinderGeometry(0.02, 0.02, 1.0, 8);
+      const chainGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.8, 8);
       const chain = new THREE.Mesh(chainGeo, lanternMat);
-      chain.position.set(0, roomHeight - 0.5, 0);
+      chain.position.set(0, ry - 0.4, 0);
       roomGroup.add(chain);
 
-      // Flame Light
-      const roomLight = new THREE.PointLight(0xffa844, 2.8, 12);
-      roomLight.position.set(0, roomHeight - 1.5, 0);
+      const roomLight = new THREE.PointLight(0xffa844, 2.6, 9.0);
+      roomLight.position.set(0, ry - 1.2, 0);
       roomLight.castShadow = true;
       roomGroup.add(roomLight);
       roomLights.push(roomLight);
 
-      const ambLight = new THREE.AmbientLight(0xdbe4ff, 0.45);
+      const ambLight = new THREE.AmbientLight(0xdbe4ff, 0.5);
       roomGroup.add(ambLight);
 
-      // --- BUILD ROOM SPECIFIC INTERIOR FURNITURE & PROPS ---
       if (theme === 'desert_room') buildDesertRoomInterior(roomGroup);
       else if (theme === 'pavilion_room') buildPavilionRoomInterior(roomGroup);
       else if (theme === 'courtyard_room') buildCourtyardRoomInterior(roomGroup);
@@ -782,15 +761,13 @@
 
       scene.add(roomGroup);
 
-      camera.position.set(0, 1.8, 4.2);
-      controls.target.set(0, 1.1, 0);
+      camera.position.set(0, 1.6, 2.2);
+      controls.target.set(0, 1.1, -0.2);
       controls.update();
     }
 
-    /* ---------------- INDIVIDUAL 3D ROOM INTERIORS ---------------- */
-
     function buildDesertRoomInterior(group) {
-      const rugGeo = new THREE.PlaneGeometry(5.2, 4.2);
+      const rugGeo = new THREE.PlaneGeometry(4.8, 3.8);
       const rugMat = new THREE.MeshStandardMaterial({ color: 0x8a2323, roughness: 0.7 });
       const rug = new THREE.Mesh(rugGeo, rugMat);
       rug.rotation.x = -Math.PI / 2;
@@ -798,21 +775,21 @@
       rug.receiveShadow = true;
       group.add(rug);
 
-      const tableGeo = new THREE.BoxGeometry(2.4, 0.5, 1.4);
+      const tableGeo = new THREE.BoxGeometry(2.2, 0.5, 1.3);
       const tableMat = new THREE.MeshStandardMaterial({ color: 0x2e180c, roughness: 0.6 });
       const table = new THREE.Mesh(tableGeo, tableMat);
-      table.position.set(0, 0.25, 0);
+      table.position.set(0, 0.25, -0.2);
       table.castShadow = true;
       table.receiveShadow = true;
       group.add(table);
 
       const dagger = create3DPilgrimDagger();
-      dagger.position.set(-0.2, 0.55, 0.1);
+      dagger.position.set(-0.2, 0.55, -0.1);
       group.add(dagger);
     }
 
     function buildPavilionRoomInterior(group) {
-      const rugGeo = new THREE.PlaneGeometry(6.0, 5.0);
+      const rugGeo = new THREE.PlaneGeometry(5.2, 4.2);
       const rugMat = new THREE.MeshStandardMaterial({ color: 0x541720, roughness: 0.5 });
       const rug = new THREE.Mesh(rugGeo, rugMat);
       rug.rotation.x = -Math.PI / 2;
@@ -820,22 +797,21 @@
       rug.receiveShadow = true;
       group.add(rug);
 
-      const deskGeo = new THREE.BoxGeometry(3.0, 0.9, 1.6);
+      const deskGeo = new THREE.BoxGeometry(2.8, 0.85, 1.5);
       const deskMat = new THREE.MeshStandardMaterial({ color: 0x2b1509, roughness: 0.4 });
       const desk = new THREE.Mesh(deskGeo, deskMat);
-      desk.position.set(0, 0.45, -0.5);
+      desk.position.set(0, 0.42, -0.5);
       desk.castShadow = true;
       desk.receiveShadow = true;
       group.add(desk);
 
-      // REAL ITEM: Parchment Treaty Scroll with Wax Seal & Signature on Desk
       const scroll = create3DParchmentScroll();
-      scroll.position.set(0, 0.95, -0.3);
+      scroll.position.set(0, 0.9, -0.3);
       group.add(scroll);
     }
 
     function buildCourtyardRoomInterior(group) {
-      const tileGeo = new THREE.PlaneGeometry(6.5, 5.5);
+      const tileGeo = new THREE.PlaneGeometry(5.5, 4.8);
       const tileMat = new THREE.MeshStandardMaterial({ color: 0x222633, roughness: 0.8 });
       const tile = new THREE.Mesh(tileGeo, tileMat);
       tile.rotation.x = -Math.PI / 2;
@@ -843,32 +819,32 @@
       tile.receiveShadow = true;
       group.add(tile);
 
-      const benchGeo = new THREE.BoxGeometry(2.6, 0.6, 1.2);
+      const benchGeo = new THREE.BoxGeometry(2.4, 0.55, 1.1);
       const benchMat = new THREE.MeshStandardMaterial({ color: 0x34394a, roughness: 0.7 });
       const bench = new THREE.Mesh(benchGeo, benchMat);
-      bench.position.set(0, 0.3, -0.8);
+      bench.position.set(0, 0.28, -0.6);
       bench.castShadow = true;
       group.add(bench);
 
       const sealRing = create3DSilverSignetRing();
-      sealRing.position.set(0, 0.65, -0.8);
+      sealRing.position.set(0, 0.6, -0.6);
       group.add(sealRing);
     }
 
     function buildGateRoomInterior(group) {
-      const gateGeo = new THREE.BoxGeometry(3.2, 3.8, 0.3);
+      const gateGeo = new THREE.BoxGeometry(2.8, 3.4, 0.25);
       const gateMat = new THREE.MeshStandardMaterial({ color: 0x361f12, roughness: 0.6 });
       const gate = new THREE.Mesh(gateGeo, gateMat);
-      gate.position.set(0, 1.9, -4.3);
+      gate.position.set(0, 1.7, -3.3);
       group.add(gate);
 
       const padlock = create3DCombinationPadlock();
-      padlock.position.set(0, 1.8, -4.0);
+      padlock.position.set(0, 1.6, -3.05);
       group.add(padlock);
     }
 
     function buildSanctuaryRoomInterior(group) {
-      const marbleGeo = new THREE.PlaneGeometry(6.8, 6.0);
+      const marbleGeo = new THREE.PlaneGeometry(5.8, 5.0);
       const marbleMat = new THREE.MeshStandardMaterial({ color: 0x0c1221, roughness: 0.15, metalness: 0.5 });
       const marble = new THREE.Mesh(marbleGeo, marbleMat);
       marble.rotation.x = -Math.PI / 2;
@@ -876,22 +852,18 @@
       marble.receiveShadow = true;
       group.add(marble);
 
-      const pedGeo = new THREE.CylinderGeometry(1.0, 1.2, 1.4, 16);
+      const pedGeo = new THREE.CylinderGeometry(0.9, 1.1, 1.3, 16);
       const pedMat = new THREE.MeshStandardMaterial({ color: 0x1e273d, roughness: 0.3, metalness: 0.4 });
       const pedestal = new THREE.Mesh(pedGeo, pedMat);
-      pedestal.position.set(0, 0.7, -0.5);
+      pedestal.position.set(0, 0.65, -0.5);
       pedestal.castShadow = true;
       group.add(pedestal);
 
       const plaque = create3DCalligraphyPlaque();
-      plaque.position.set(0, 1.6, -0.5);
+      plaque.position.set(0, 1.5, -0.5);
       group.add(plaque);
     }
 
-
-    /* ---------------- 3D PROPS WITH HIGH-RES CANVAS TEXTURES ---------------- */
-
-    // Helper to configure HD sharp canvas texture
     function createHDTexture(canvas) {
       const texture = new THREE.CanvasTexture(canvas);
       texture.anisotropy = renderer ? renderer.capabilities.getMaxAnisotropy() : 16;
@@ -902,7 +874,6 @@
       return texture;
     }
 
-    // 1. Diplomatic Parchment Treaty Scroll
     function create3DParchmentScroll() {
       const scrollGroup = new THREE.Group();
       scrollGroup.userData = {
@@ -914,8 +885,7 @@
       };
 
       const canvasTex = createHDTexture(createScrollTextureCanvas());
-
-      const sheetGeo = new THREE.PlaneGeometry(1.4, 1.1);
+      const sheetGeo = new THREE.PlaneGeometry(1.3, 1.0);
       const sheetMat = new THREE.MeshStandardMaterial({
         map: canvasTex,
         roughness: 0.6,
@@ -926,24 +896,23 @@
       sheet.rotation.x = -Math.PI / 2 + 0.15;
       scrollGroup.add(sheet);
 
-      const rollGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.4, 24);
+      const rollGeo = new THREE.CylinderGeometry(0.07, 0.07, 1.3, 24);
       const rollMat = new THREE.MeshStandardMaterial({ color: 0xd6c08d, roughness: 0.6 });
 
       const topRoll = new THREE.Mesh(rollGeo, rollMat);
       topRoll.rotation.z = Math.PI / 2;
-      topRoll.position.set(0, 0.04, -0.55);
+      topRoll.position.set(0, 0.04, -0.5);
       scrollGroup.add(topRoll);
 
       const btmRoll = new THREE.Mesh(rollGeo, rollMat);
       btmRoll.rotation.z = Math.PI / 2;
-      btmRoll.position.set(0, 0.04, 0.55);
+      btmRoll.position.set(0, 0.04, 0.5);
       scrollGroup.add(btmRoll);
 
       interactiveObjects.push(scrollGroup);
       return scrollGroup;
     }
 
-    // 2. Sheathed Pilgrim Dagger
     function create3DPilgrimDagger() {
       const daggerGroup = new THREE.Group();
       daggerGroup.userData = {
@@ -955,7 +924,7 @@
       };
 
       const canvasTex = createHDTexture(createDaggerTextureCanvas());
-      const scabbardGeo = new THREE.CylinderGeometry(0.12, 0.06, 1.4, 24);
+      const scabbardGeo = new THREE.CylinderGeometry(0.11, 0.05, 1.3, 24);
       const scabbardMat = new THREE.MeshStandardMaterial({ map: canvasTex, roughness: 0.3, metalness: 0.6 });
       const scabbard = new THREE.Mesh(scabbardGeo, scabbardMat);
       scabbard.rotation.z = Math.PI / 2;
@@ -965,7 +934,6 @@
       return daggerGroup;
     }
 
-    // 3. Silver Signet Ring
     function create3DSilverSignetRing() {
       const ringGroup = new THREE.Group();
       ringGroup.userData = {
@@ -977,13 +945,13 @@
       };
 
       const canvasTex = createHDTexture(createRingTextureCanvas());
-      const sealGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.1, 32);
+      const sealGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.1, 32);
       const sealMat = new THREE.MeshStandardMaterial({ map: canvasTex, metalness: 0.9, roughness: 0.15 });
       const seal = new THREE.Mesh(sealGeo, sealMat);
-      seal.position.y = 0.2;
+      seal.position.y = 0.18;
       ringGroup.add(seal);
 
-      const cushionGeo = new THREE.BoxGeometry(0.9, 0.2, 0.9);
+      const cushionGeo = new THREE.BoxGeometry(0.8, 0.18, 0.8);
       const cushionMat = new THREE.MeshStandardMaterial({ color: 0x4a101b, roughness: 0.8 });
       const cushion = new THREE.Mesh(cushionGeo, cushionMat);
       ringGroup.add(cushion);
@@ -992,7 +960,6 @@
       return ringGroup;
     }
 
-    // 4. Combination Padlock with ULTRA CLEAR Dynamic Canvas Texture
     function create3DCombinationPadlock() {
       const lockGroup = new THREE.Group();
       lockGroup.userData = {
@@ -1004,29 +971,21 @@
       };
 
       const canvasTex = createHDTexture(createPadlockTextureCanvas());
-
-      // Lock Main Plate with Front Texture Face
-      const bodyGeo = new THREE.BoxGeometry(1.2, 1.0, 0.3);
-      const bodyMat = new THREE.MeshStandardMaterial({
-        map: canvasTex,
-        metalness: 0.75,
-        roughness: 0.25
-      });
+      const bodyGeo = new THREE.BoxGeometry(1.1, 0.9, 0.25);
+      const bodyMat = new THREE.MeshStandardMaterial({ map: canvasTex, metalness: 0.75, roughness: 0.25 });
       const body = new THREE.Mesh(bodyGeo, bodyMat);
       lockGroup.add(body);
 
-      // Metallic Steel Shackle Ring
-      const shackleGeo = new THREE.TorusGeometry(0.35, 0.08, 16, 32, Math.PI);
+      const shackleGeo = new THREE.TorusGeometry(0.32, 0.07, 16, 32, Math.PI);
       const shackleMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.95, roughness: 0.1 });
       const shackle = new THREE.Mesh(shackleGeo, shackleMat);
-      shackle.position.set(0, 0.5, 0);
+      shackle.position.set(0, 0.45, 0);
       lockGroup.add(shackle);
 
       interactiveObjects.push(lockGroup);
       return lockGroup;
     }
 
-    // 5. Manifest Victory Calligraphy Plaque
     function create3DCalligraphyPlaque() {
       const plaqueGroup = new THREE.Group();
       plaqueGroup.userData = {
@@ -1038,7 +997,7 @@
       };
 
       const canvasTex = createHDTexture(createPlaqueTextureCanvas());
-      const plateGeo = new THREE.BoxGeometry(1.6, 1.2, 0.1);
+      const plateGeo = new THREE.BoxGeometry(1.5, 1.1, 0.09);
       const plateMat = new THREE.MeshStandardMaterial({ map: canvasTex, metalness: 0.85, roughness: 0.15 });
       const plate = new THREE.Mesh(plateGeo, plateMat);
       plaqueGroup.add(plate);
@@ -1047,15 +1006,35 @@
       return plaqueGroup;
     }
 
-
-    /* Raycasting & Hover FX */
     function onMouseMove(event) {
       mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
       mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+      checkIntersects(event.clientX, event.clientY);
+    }
 
+    function onTouchStart(event) {
+      if (event.touches.length === 1) {
+        const touch = event.touches[0];
+        mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+        
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(interactiveObjects, true);
+
+        if (intersects.length > 0) {
+          let obj = intersects[0].object;
+          while (obj.parent && !obj.userData.name) obj = obj.parent;
+          if (obj.userData && obj.userData.name) {
+            hoveredObject = obj;
+            onCanvasClick();
+          }
+        }
+      }
+    }
+
+    function checkIntersects(clientX, clientY) {
       raycaster.setFromCamera(mouse, camera);
       const intersects = raycaster.intersectObjects(interactiveObjects, true);
-
       const tooltip = document.getElementById('hoverTooltip');
 
       if (intersects.length > 0) {
@@ -1066,10 +1045,10 @@
           hoveredObject = obj;
           document.body.style.cursor = 'pointer';
           tooltip.classList.remove('hidden');
-          tooltip.style.left = `${event.clientX}px`;
-          tooltip.style.top = `${event.clientY}px`;
+          tooltip.style.left = `${clientX}px`;
+          tooltip.style.top = `${clientY}px`;
           document.getElementById('tooltipIcon').innerText = obj.userData.icon || "🔍";
-          document.getElementById('tooltipText').innerText = `${obj.userData.name} (Click to Inspect)`;
+          document.getElementById('tooltipText').innerText = `${obj.userData.name} (Tap to Inspect)`;
           return;
         }
       }
@@ -1083,7 +1062,6 @@
       if (hoveredObject && hoveredObject.userData.name) {
         playSynthSound(650, 'sine', 0.12);
         
-        const mission = activeCase.missions[currentState.currentMissionIdx];
         if (!currentState.collectedItems.includes(hoveredObject.userData.name)) {
           currentState.collectedItems.push(hoveredObject.userData.name);
           updateHUD();
@@ -1104,7 +1082,7 @@
 
       if (roomLights.length > 0) {
         roomLights.forEach(light => {
-          light.intensity = 2.6 + Math.sin(Date.now() * 0.008) * 0.4 + (Math.random() - 0.5) * 0.1;
+          light.intensity = 2.4 + Math.sin(Date.now() * 0.008) * 0.35 + (Math.random() - 0.5) * 0.08;
         });
       }
 
@@ -1118,48 +1096,48 @@
 
 
     /* =========================================================================
-       5. ENHANCED CLOSE-UP 360° ITEM INSPECTOR & HIGH-RES MAGNIFIER
+       5. ENHANCED MOBILE-RESPONSIVE 360° INSPECTOR & MAGNIFIER
        ========================================================================= */
     function open3DInspectorModal(itemData) {
       const backdrop = document.getElementById('modalBackdrop');
       const content = document.getElementById('modalContent');
 
       content.innerHTML = `
-        <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl font-bold z-20">&times;</button>
+        <button onclick="closeModal()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-2xl font-bold z-20">&times;</button>
         
-        <div class="flex items-center gap-2 text-xs font-black uppercase text-amber-400 tracking-wider mb-1">
-          <span>🔍 3D Evidence & Inscription Inspector</span>
+        <div class="flex items-center gap-1.5 text-[10px] sm:text-xs font-black uppercase text-amber-400 tracking-wider mb-1">
+          <span>🔍 3D Evidence Inspector</span>
         </div>
-        <h2 class="text-xl md:text-2xl font-black text-white mb-2 flex items-center gap-2">
+        <h2 class="text-base sm:text-xl font-black text-white mb-2 flex items-center gap-2">
           <span>${itemData.icon || '📜'}</span>
-          <span>${itemData.name}</span>
+          <span class="truncate">${itemData.name}</span>
         </h2>
 
-        <!-- 3D Canvas Window with Dynamic Studio Lighting -->
-        <div class="w-full h-64 md:h-72 rounded-xl bg-gradient-to-b from-slate-950 to-slate-900 border border-amber-500/40 relative overflow-hidden my-2 shadow-2xl" id="inspector-canvas-container">
-          <div class="absolute bottom-2 left-2 z-10 glass-pill px-3 py-1 rounded-full text-[10px] text-amber-300 font-bold border border-amber-500/30 pointer-events-none flex items-center gap-1.5">
-            <span>🔄 Drag 360° to Orbit</span>
+        <!-- 3D Canvas Window -->
+        <div class="w-full h-44 sm:h-64 rounded-xl bg-gradient-to-b from-slate-950 to-slate-900 border border-amber-500/40 relative overflow-hidden my-2 shadow-2xl" id="inspector-canvas-container">
+          <div class="absolute bottom-2 left-2 z-10 glass-pill px-2.5 py-1 rounded-full text-[9px] sm:text-[10px] text-amber-300 font-bold border border-amber-500/30 pointer-events-none flex items-center gap-1">
+            <span>🔄 Drag 360°</span>
             <span>&bull;</span>
-            <span>🔍 Scroll to Zoom</span>
+            <span>🔍 Zoom</span>
           </div>
         </div>
 
         <!-- MAGNIFIED HIGH-RES SIGNATURE / INSCRIPTION CANVAS DISPLAY -->
-        <div class="p-3.5 rounded-xl bg-slate-900/90 border border-amber-500/30 mb-3 flex flex-col md:flex-row items-center gap-3">
-          <div class="w-full md:w-56 h-40 rounded-lg bg-slate-950 border border-amber-400/50 overflow-hidden flex items-center justify-center shrink-0 shadow-inner p-1">
+        <div class="p-2.5 sm:p-3.5 rounded-xl bg-slate-900/90 border border-amber-500/30 mb-3 flex flex-col sm:flex-row items-center gap-3">
+          <div class="w-full sm:w-48 h-28 sm:h-32 rounded-lg bg-slate-950 border border-amber-400/50 overflow-hidden flex items-center justify-center shrink-0 shadow-inner p-1">
             <canvas id="magnifiedCanvas" class="w-full h-full object-contain rounded"></canvas>
           </div>
-          <div class="space-y-1.5 text-left text-xs">
-            <div class="text-[10px] uppercase font-black text-amber-400 tracking-wider flex items-center gap-1">
-              <span>🔬 High-Resolution Inscription Magnifier</span>
+          <div class="space-y-1 text-left text-xs w-full">
+            <div class="text-[9px] uppercase font-black text-amber-400 tracking-wider flex items-center gap-1">
+              <span>🔬 High-Resolution Magnifier</span>
             </div>
-            <p class="font-bold text-slate-100 text-sm leading-snug">${itemData.inspectText || "Historical artifact discovered inside the chamber."}</p>
-            <p class="text-slate-300 leading-relaxed text-[11px]">${itemData.inspectDetails || ""}</p>
+            <p class="font-bold text-slate-100 text-xs sm:text-sm leading-snug">${itemData.inspectText || "Historical artifact discovered."}</p>
+            <p class="text-slate-300 leading-relaxed text-[10px] sm:text-[11px]">${itemData.inspectDetails || ""}</p>
           </div>
         </div>
 
         <div class="flex gap-2">
-          <button onclick="openChamberLockModal()" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 font-bold text-slate-950 text-xs uppercase tracking-wider transition shadow-lg hover:shadow-amber-500/20 active:scale-98">
+          <button onclick="openChamberLockModal()" class="w-full py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 font-bold text-slate-950 text-xs uppercase tracking-wider transition shadow-lg hover:shadow-amber-500/20 active:scale-98 min-h-[44px]">
             🔓 Open Chamber Door Lock
           </button>
         </div>
@@ -1172,7 +1150,6 @@
       }, 60);
     }
 
-    // Render Magnified Signature directly into modal canvas
     function drawMagnifiedSignature(itemData) {
       const magCanvas = document.getElementById('magnifiedCanvas');
       if (!magCanvas) return;
@@ -1224,7 +1201,6 @@
 
       inspectorControls.addEventListener('start', () => { inspectorControls.autoRotate = false; });
 
-      // --- BRIGHT HIGH-CLARITY 360 STUDIO LIGHTING SETUP ---
       const keyLight = new THREE.DirectionalLight(0xffffff, 2.8);
       keyLight.position.set(2, 4, 6);
       inspectorScene.add(keyLight);
@@ -1239,10 +1215,6 @@
 
       const ambLight = new THREE.AmbientLight(0xffffff, 0.9);
       inspectorScene.add(ambLight);
-
-      const topPoint = new THREE.PointLight(0xffffff, 2.0, 10);
-      topPoint.position.set(0, 3, 2);
-      inspectorScene.add(topPoint);
 
       let clonedItem;
       let camDistance = 2.0;
@@ -1296,27 +1268,67 @@
       document.getElementById('missionTitleText').innerText = `Room ${currentState.currentMissionIdx + 1}: ${mission.title}`;
 
       const invContainer = document.getElementById('inventoryContainer');
-      invContainer.innerHTML = activeCase.missions.map((m) => {
+      invContainer.innerHTML = activeCase.missions.map((m, idx) => {
         const isCollected = currentState.collectedItems.includes(m.clueItemName);
         return `
-          <button onclick="inspectInventoryItem('${m.clueItemName}')" class="px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition ${
+          <button ${isCollected ? `onclick="inspectInventoryItem('${m.clueItemName}')"` : `onclick="handleUncollectedItemClick(${idx + 1})"`} 
+            class="px-2.5 py-1 rounded-xl text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition shrink-0 ${
             isCollected 
-              ? 'bg-amber-500/20 border border-amber-400 text-amber-300 shadow-md hover:bg-amber-500/30' 
-              : 'bg-slate-900/60 border border-slate-800 text-slate-500 opacity-60'
+              ? 'bg-amber-500/20 border border-amber-400 text-amber-300 shadow-md hover:bg-amber-500/30 cursor-pointer' 
+              : 'bg-slate-900/60 border border-slate-800 text-slate-500 opacity-50 cursor-pointer'
           }">
             <span>${isCollected ? m.clueIcon : '🔒'}</span>
-            <span class="whitespace-nowrap">${m.clueItemName}</span>
+            <span class="whitespace-nowrap">${isCollected ? m.clueItemName : `Room ${idx + 1}`}</span>
           </button>
         `;
       }).join('');
     }
 
+    function handleUncollectedItemClick(roomNum) {
+      playErrorBuzz();
+      alert(`🔒 Artifact Locked: This object belongs to Room ${roomNum} and cannot be inspected until discovered.`);
+    }
+
     function inspectInventoryItem(itemName) {
+      if (!currentState.collectedItems.includes(itemName)) {
+        playErrorBuzz();
+        alert("🔒 Artifact Locked: You have not yet discovered this item!");
+        return;
+      }
+
+      const mission = activeCase.missions.find(m => m.clueItemName === itemName);
+      let inspectText = "Item stored in room inventory.";
+      let inspectDetails = "Examine dial numbers, signatures, and inscriptions closely.";
+      let signatureType = "plaque";
+
+      if (itemName.includes("Scroll")) { 
+        inspectText = "Parchment Scroll bearing the official Red Wax Seal and Signature of 'SUHAIL'."; 
+        inspectDetails = "Suhail ibn Amr signed on behalf of the Quraysh, establishing a historic 10-year peace pact."; 
+        signatureType = "scroll"; 
+      } else if (itemName.includes("Dagger")) { 
+        inspectText = "Brass Sheath Inscription: '1400 Unarmed Pilgrims March for Umrah (628 CE)'"; 
+        inspectDetails = "Muslims brought only single travel daggers sheathed in leather to demonstrate their peaceful intent."; 
+        signatureType = "dagger"; 
+      } else if (itemName.includes("Ring")) { 
+        inspectText = "Silver Ring inscribed with 'RIDWAN' and official seal."; 
+        inspectDetails = "Commemorates the pledge under the acacia tree."; 
+        signatureType = "ring"; 
+      } else if (itemName.includes("Lock")) { 
+        inspectText = "Iron Padlock with clear combination dial displaying '10' Years Armistice Code."; 
+        inspectDetails = "Inspect the high-resolution dial face to confirm the 10-year truce duration code."; 
+        signatureType = "lock"; 
+      } else if (itemName.includes("Plaque")) { 
+        inspectText = "Gold Calligraphy Plaque: 'Inna Fatahina Laka Fathan Mubeena' (Surah Al-Fath)"; 
+        inspectDetails = "Proclaims the Treaty of Hudaibiyah as a Manifest Divine Victory."; 
+        signatureType = "plaque"; 
+      }
+
       open3DInspectorModal({
         name: itemName,
-        icon: "📜",
-        inspectText: `Item stored in room inventory.`,
-        inspectDetails: `Examine dial numbers, signatures, and inscriptions closely.`
+        icon: mission ? mission.clueIcon : "📜",
+        inspectText: inspectText,
+        inspectDetails: inspectDetails,
+        signatureType: signatureType
       });
     }
 
@@ -1326,26 +1338,26 @@
       const content = document.getElementById('modalContent');
 
       content.innerHTML = `
-        <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl font-bold">&times;</button>
+        <button onclick="closeModal()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-2xl font-bold">&times;</button>
         
-        <div class="flex items-center gap-2 text-xs uppercase font-black text-amber-400 tracking-wider mb-1">
+        <div class="flex items-center gap-1.5 text-[10px] sm:text-xs uppercase font-black text-amber-400 tracking-wider mb-1">
           <span>🔓 Room ${currentState.currentMissionIdx + 1} Exit Door Mechanism</span>
         </div>
-        <h2 class="text-xl md:text-2xl font-black text-white mb-2">${mission.title}</h2>
+        <h2 class="text-base sm:text-xl font-black text-white mb-2">${mission.title}</h2>
 
-        <div class="p-4 rounded-xl bg-slate-900/80 border border-amber-500/20 text-slate-300 text-xs md:text-sm leading-relaxed mb-4">
+        <div class="p-3 sm:p-4 rounded-xl bg-slate-900/80 border border-amber-500/20 text-slate-300 text-xs leading-relaxed mb-3">
           ${mission.story}
         </div>
 
-        <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-700/80 mb-2">
-          <label class="block text-xs font-bold uppercase text-amber-400 mb-2">
-            ❓ Door Combination Key Code Challenge:
+        <div class="p-3 sm:p-4 rounded-xl bg-slate-900/90 border border-slate-700/80 mb-2">
+          <label class="block text-[10px] sm:text-xs font-bold uppercase text-amber-400 mb-1.5">
+            ❓ Door Key Code Challenge:
           </label>
-          <p class="text-xs md:text-sm text-slate-100 font-semibold mb-4">${mission.question}</p>
+          <p class="text-xs sm:text-sm text-slate-100 font-semibold mb-3">${mission.question}</p>
 
-          <div class="grid grid-cols-1 gap-2">
+          <div class="grid grid-cols-1 gap-1.5 sm:gap-2">
             ${mission.options.map((opt, i) => `
-              <button onclick="submitQuizAnswer(${i})" class="w-full text-left p-3 rounded-lg bg-slate-800/80 hover:bg-amber-500/20 border border-slate-700 hover:border-amber-400 text-xs md:text-sm font-semibold text-slate-200 hover:text-amber-300 transition flex items-center justify-between">
+              <button onclick="submitQuizAnswer(${i})" class="w-full text-left p-2.5 sm:p-3 rounded-lg bg-slate-800/80 hover:bg-amber-500/20 border border-slate-700 hover:border-amber-400 text-xs font-semibold text-slate-200 hover:text-amber-300 transition flex items-center justify-between min-h-[44px]">
                 <span><strong class="text-amber-400 mr-2">${String.fromCharCode(65 + i)}.</strong> ${opt}</span>
                 <span>🔑</span>
               </button>
@@ -1370,19 +1382,19 @@
         const isLast = currentState.currentMissionIdx >= activeCase.missions.length - 1;
 
         content.innerHTML = `
-          <div class="text-center py-6">
-            <div class="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-400 text-emerald-400 text-3xl flex items-center justify-center mx-auto mb-4 animate-bounce">
+          <div class="text-center py-4 sm:py-6">
+            <div class="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-400 text-emerald-400 text-2xl sm:text-3xl flex items-center justify-center mx-auto mb-3 animate-bounce">
               ✓
             </div>
-            <h2 class="text-2xl font-black text-emerald-300 mb-2">Chamber Door Unlocked!</h2>
-            <p class="text-sm text-slate-300 mb-6">You successfully deduced the historic key for <strong>"${mission.clueItemName}"</strong>.</p>
+            <h2 class="text-xl sm:text-2xl font-black text-emerald-300 mb-1.5">Chamber Door Unlocked!</h2>
+            <p class="text-xs sm:text-sm text-slate-300 mb-5">You successfully deduced the historic key for <strong>"${mission.clueItemName}"</strong>.</p>
 
             ${isLast ? `
-              <button onclick="showCertificate()" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 font-bold text-slate-950 text-xs uppercase tracking-wider shadow-lg hover:shadow-amber-500/30 transition">
+              <button onclick="showCertificate()" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 font-bold text-slate-950 text-xs uppercase tracking-wider shadow-lg hover:shadow-amber-500/30 transition min-h-[44px]">
                 🏆 View Final Escape Certificate & Report
               </button>
             ` : `
-              <button onclick="nextMission()" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 font-bold text-slate-950 text-xs uppercase tracking-wider shadow-lg hover:shadow-amber-500/30 transition">
+              <button onclick="nextMission()" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 font-bold text-slate-950 text-xs uppercase tracking-wider shadow-lg hover:shadow-amber-500/30 transition min-h-[44px]">
                 Enter Room ${currentState.currentMissionIdx + 2} &rarr;
               </button>
             `}
@@ -1410,14 +1422,14 @@
       const content = document.getElementById('modalContent');
 
       content.innerHTML = `
-        <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl font-bold">&times;</button>
+        <button onclick="closeModal()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-2xl font-bold">&times;</button>
         
         <div class="text-center p-2 border-2 border-amber-500/50 rounded-xl bg-slate-900/90">
-          <div class="text-xs font-black uppercase text-amber-400 tracking-widest mb-1">Archive Completion Record</div>
-          <h2 class="text-2xl font-black text-white mb-1">${activeCase.title}</h2>
-          <div class="text-xs text-slate-400 mb-4">3D Escape Room Case Solved</div>
+          <div class="text-[10px] font-black uppercase text-amber-400 tracking-widest mb-1">Archive Completion Record</div>
+          <h2 class="text-lg sm:text-2xl font-black text-white mb-1">${activeCase.title}</h2>
+          <div class="text-xs text-slate-400 mb-3">3D Escape Room Case Solved</div>
 
-          <div class="my-4 py-3 px-4 rounded-lg bg-amber-500/10 border border-amber-500/30 text-left text-xs md:text-sm text-slate-200 space-y-2">
+          <div class="my-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-left text-xs text-slate-200 space-y-1.5">
             <p class="font-bold text-amber-300">🔑 Strategic Diplomacy Takeaways:</p>
             <ul class="list-disc pl-4 space-y-1 text-slate-300">
               <li>Patience over Provocation: Unarmed pilgrimage emphasized diplomatic goodwill.</li>
@@ -1426,13 +1438,13 @@
             </ul>
           </div>
 
-          <div class="flex items-center justify-between pt-3 border-t border-slate-800 text-xs text-slate-400">
+          <div class="flex items-center justify-between pt-2 border-t border-slate-800 text-[10px] sm:text-xs text-slate-400">
             <span>Status: <strong class="text-emerald-400">ALL ROOMS ESCAPED (100%)</strong></span>
-            <span>Items Collected: ${currentState.collectedItems.length} / ${activeCase.missions.length}</span>
+            <span>Items: ${currentState.collectedItems.length} / ${activeCase.missions.length}</span>
           </div>
 
-          <div class="flex gap-2 mt-5">
-            <button onclick="restartCase()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs uppercase tracking-wider transition">
+          <div class="flex gap-2 mt-4">
+            <button onclick="restartCase()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 text-slate-950 font-bold text-xs uppercase tracking-wider transition min-h-[44px]">
               🔄 Replay Rooms
             </button>
           </div>
@@ -1477,7 +1489,6 @@
       }
     }
 
-    // Keyboard Shortcut for Admin Access (Ctrl + Shift + A)
     window.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
         e.preventDefault();
@@ -1490,27 +1501,27 @@
       const content = document.getElementById('modalContent');
 
       content.innerHTML = `
-        <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white text-2xl font-bold">&times;</button>
+        <button onclick="closeModal()" class="absolute top-3 right-3 text-slate-400 hover:text-white text-2xl font-bold">&times;</button>
         
         <div class="flex items-center gap-2 text-xs uppercase font-black text-amber-400 tracking-wider mb-1">
           <span>⚙️ Protected Director Mode</span>
         </div>
-        <h2 class="text-xl font-black text-white mb-4">Edit Room Architecture & Case Data</h2>
+        <h2 class="text-lg font-black text-white mb-3">Edit Room Architecture</h2>
 
-        <div class="space-y-4 text-xs">
+        <div class="space-y-3 text-xs">
           <div>
-            <label class="block font-bold text-slate-300 uppercase mb-1">Case Title</label>
-            <input id="adminCaseTitle" type="text" value="${activeCase.title}" class="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-semibold focus:border-amber-400 focus:outline-none">
+            <label class="block font-bold text-slate-300 uppercase mb-1 text-[10px]">Case Title</label>
+            <input id="adminCaseTitle" type="text" value="${activeCase.title}" class="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 text-white font-semibold focus:border-amber-400 focus:outline-none">
           </div>
 
-          <div class="border-t border-slate-800 pt-3">
-            <h3 class="font-bold text-amber-400 uppercase mb-2">3D Room Chambers (${activeCase.missions.length})</h3>
-            <div class="space-y-3 max-h-60 overflow-y-auto pr-1">
+          <div class="border-t border-slate-800 pt-2">
+            <h3 class="font-bold text-amber-400 uppercase mb-2 text-[10px]">3D Chambers (${activeCase.missions.length})</h3>
+            <div class="space-y-2 max-h-52 overflow-y-auto pr-1">
               ${activeCase.missions.map((m, idx) => `
-                <div class="p-3 rounded-lg bg-slate-900/90 border border-slate-800 space-y-2">
-                  <div class="flex items-center justify-between font-bold text-slate-200">
+                <div class="p-2.5 rounded-lg bg-slate-900/90 border border-slate-800 space-y-1.5">
+                  <div class="flex items-center justify-between font-bold text-slate-200 text-[11px]">
                     <span>Room ${idx + 1} Theme:</span>
-                    <select id="theme_${idx}" class="bg-slate-800 text-amber-300 rounded px-2 py-1 text-[11px] border border-slate-700">
+                    <select id="theme_${idx}" class="bg-slate-800 text-amber-300 rounded px-2 py-1 text-[10px] border border-slate-700">
                       <option value="desert_room" ${m.theme === 'desert_room' ? 'selected' : ''}>Tent Enclosure Room</option>
                       <option value="pavilion_room" ${m.theme === 'pavilion_room' ? 'selected' : ''}>Negotiating Pavilion Room</option>
                       <option value="courtyard_room" ${m.theme === 'courtyard_room' ? 'selected' : ''}>Courtyard Room</option>
@@ -1518,17 +1529,17 @@
                       <option value="sanctuary_room" ${m.theme === 'sanctuary_room' ? 'selected' : ''}>Sanctuary Victory Hall</option>
                     </select>
                   </div>
-                  <input id="mTitle_${idx}" type="text" value="${m.title}" class="w-full p-2 rounded bg-slate-800 border border-slate-700 text-white font-medium">
+                  <input id="mTitle_${idx}" type="text" value="${m.title}" class="w-full p-1.5 rounded bg-slate-800 border border-slate-700 text-white font-medium text-[11px]">
                 </div>
               `).join('')}
             </div>
           </div>
 
-          <div class="flex gap-2 pt-3 border-t border-slate-800">
-            <button onclick="saveAdminChanges()" class="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs uppercase tracking-wider transition">
+          <div class="flex gap-2 pt-2 border-t border-slate-800">
+            <button onclick="saveAdminChanges()" class="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs uppercase tracking-wider transition min-h-[44px]">
               💾 Save Room Configuration
             </button>
-            <button onclick="resetDefaultCase()" class="px-4 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase transition whitespace-nowrap">
+            <button onclick="resetDefaultCase()" class="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase transition whitespace-nowrap min-h-[44px]">
               Reset Default
             </button>
           </div>
